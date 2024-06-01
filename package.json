@@ -1,0 +1,19 @@
+{
+  "name": "riichi-nya",
+  "version": "0.0.1",
+  "description": "Declare Riichi as soon as possible. Fast attack for the win!",
+  "main": "build/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node ."
+  },
+  "dependencies": {
+    "discordx": "^11.9.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.13.0",
+    "tsx": "^4.11.0"
+  }
+}
