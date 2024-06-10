@@ -1,6 +1,7 @@
+import { Message } from "discord.js"
 
 export interface CommandBuilder {
-    getCommandName() : String;
-    getCooldown() : Number;
-    runCommand(event : MessageEvent) : void;
+    getCommandName() : string;
+    getCooldown() : number;
+    runCommand(event : Message, args : string[]) : void;
 }
