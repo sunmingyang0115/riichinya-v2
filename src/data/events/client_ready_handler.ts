@@ -5,7 +5,7 @@ export = {
     getEventType(): string {
         return Events.ClientReady;
     },
-    getEventCallFunction() : (...args: any[]) => void {
-        return (c : Client) => console.log("Client", c.user!.displayName, "online!");
+    async getEventCallFunction(c : Client)  {
+        console.log("Client", c.user!.displayName, "online!");
     }
 } as EventBuilder;

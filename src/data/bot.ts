@@ -8,9 +8,14 @@ export class Bot {
     constructor(_token: string | undefined) {
         this.token = _token;
         this.client = new Client({ intents: ['Guilds', 'GuildMessages', 'MessageContent'] });
-        let events : EventBuilder[] = [require("./events/client_ready_handler.js")]
-        events.forEach( (event : EventBuilder) => {
-            this.client.on(event.getEventType(), event.getEventCallFunction());
+        let events : EventBuilder[] = [
+            require("./events/client_ready_handler.js"),
+            require("./events/message_create_handler.js")
+        ]
+        Events.MessageCreate
+        
+        events.forEach((event : EventBuilder) => {
+            this.client.on(event.getEventType(), event.getEventCallFunction);
         })
     }
 
