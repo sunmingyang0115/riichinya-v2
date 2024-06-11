@@ -1,4 +1,4 @@
-import { ClientOptions, Events, Message, Client, REST, SlashCommandBuilder, Routes } from "discord.js"
+import { Client } from "discord.js"
 import { EventBuilder } from "./event_manager.js";
 import { ClientReadyHandler } from "../events/client_ready_handler.js";
 import { MessageCreateHandler } from "../events/message_create_handler.js";
