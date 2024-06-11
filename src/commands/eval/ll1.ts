@@ -49,6 +49,9 @@ export class LL_1 {
             this.tk.nextToken();
             let b = this.rule_F();
             return this.rule_Td(this.new_div_safe(a, b));
+        } else if (this.tk.peakToken() == '(') {
+            let b = this.rule_F();
+            return this.rule_Td(this.new_mul_safe(a, b));
         }
         return a;
     }
