@@ -61,7 +61,13 @@ export class LL_1 {
                 return res;
             }
             return null;    
-        } else if (!Number.isNaN(Number(this.tk.peakToken()))) {
+        }
+        else if (this.tk.peakToken() == '-') {
+            this.tk.nextToken();
+            let b = this.rule_T();
+            return this.new_sub_safe(this.new_lit_safe(0), b);
+        }
+        else if (!Number.isNaN(Number(this.tk.peakToken()))) {
             return this.new_lit_safe(Number(this.tk.nextToken()));
         }
         return null;

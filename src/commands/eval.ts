@@ -12,7 +12,7 @@ export class EvalCommand implements CommandBuilder {
     async runCommand(event: Message<boolean>, args: string[]) {
         let raw = args.join(' ');
         let ast = parseArithmetic(raw);
-        await event.reply(raw + " => " + ast?.toString() + " => " + ast?.interp());
+        await event.reply("```" + raw + "``` => ```" + ast?.toString() + "``` => ```" + ast?.interp() + "```");
     }
     
 }
