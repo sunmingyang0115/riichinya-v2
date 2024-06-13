@@ -1,4 +1,4 @@
-import { AST } from "./ast";
+import { AST } from "./imm_ast";
 import { LL_1 } from "./ll1";
 import { Tokenizer } from "./tokenizer";
 

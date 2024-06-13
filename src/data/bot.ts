@@ -2,9 +2,9 @@ import { Client } from "discord.js"
 import { EventBuilder } from "./event_manager.js";
 import { ClientReadyHandler } from "../events/client_ready_handler.js";
 import { MessageCreateHandler } from "../events/message_create_handler.js";
-import { CommandBuilder } from "./command_manager.js";
-import { PingCommand } from "../commands/ping.js";
-import { EvalCommand } from "../commands/eval.js";
+import { CommandBuilder } from "./cmd_manager.js";
+import { PingCommand } from "../cmds/ping.js";
+import { EvalCommand } from "../cmds/eval.js";
 
 export class Bot {
     private token: string | undefined;

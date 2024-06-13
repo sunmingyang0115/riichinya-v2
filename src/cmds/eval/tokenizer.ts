@@ -1,5 +1,5 @@
 
-const sy = ['(',')','*','/','-','+','^']
+const sy = ['(',')','*','/','-','+','^','log','sin','cos','tan','e']
 
 export class Tokenizer {
     tokens : string[];
