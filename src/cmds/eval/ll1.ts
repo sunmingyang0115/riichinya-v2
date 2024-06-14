@@ -23,11 +23,11 @@ export class LL_1 {
         if (this.tk.peakToken() == '+') {
             this.tk.nextToken();
             let b = this.rule_T();
-            return this.rule_Td(this.map_binary(this.add, a, b));
+            return this.rule_Ed(this.map_binary(this.add, a, b));
         } else if (this.tk.peakToken() == '-') {
             this.tk.nextToken();
             let b = this.rule_T();
-            return this.rule_Td(this.map_binary(this.sub, a, b));
+            return this.rule_Ed(this.map_binary(this.sub, a, b));
         }
         return a;
     }

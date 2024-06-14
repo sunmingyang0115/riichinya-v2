@@ -13,7 +13,7 @@ import { Documentation } from "./doc_manager";
 export interface CommandBuilder {
     getCommandName() : string;
     getCooldown() : number;
-    getDocumentation() : Documentation;
+    getDocumentation() : string;
     runCommand(event : Message, args : string[]) : void;
 }
 
