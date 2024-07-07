@@ -2,6 +2,7 @@
 .vscode
 .env
 .env.local
+.sql
 package-lock.json
 yarn.lock
 

@@ -8,7 +8,7 @@ export class MessageCreateHandler implements EventBuilder {
         this.messageMap = new Map<string, CommandBuilder>;
         commands.forEach((command : CommandBuilder) => {
             this.messageMap.set(command.getCommandName(), command);
-        })
+        });
     }
     getEventType(): string {
         return Events.MessageCreate;

@@ -18,11 +18,11 @@ export class Bot {
             new EvalCommand(),
             new TestCommand(),
             new RiichiDbCommand()
-        ]
+        ];
         let events : EventBuilder[] = [
             new ClientReadyHandler(),
             new MessageCreateHandler(commands)
-        ]
+        ];
         this.token = _token;
         this.client = new Client({ intents: ['Guilds', 'GuildMessages', 'MessageContent'] });
         this.addEventHandles(events);
@@ -31,7 +31,7 @@ export class Bot {
     private addEventHandles(events : EventBuilder[]) {
         events.forEach((event : EventBuilder) => {
             this.client.on(event.getEventType(), event.getEventCallFunction.bind(event));
-        })
+        });
     }
 
     public run() {
