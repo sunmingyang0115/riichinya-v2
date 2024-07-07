@@ -1,5 +1,4 @@
 import { Message } from "discord.js"
-import { Documentation } from "./doc_manager";
 
 /**
  * This interface is used to create commands.

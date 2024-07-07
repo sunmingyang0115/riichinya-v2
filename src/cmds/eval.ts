@@ -11,9 +11,10 @@ export class EvalCommand implements CommandBuilder {
         .addSingleSubCom("eval-args", ExpectedType.TEXT, "the mathematical expression in text to be calculated")
         .addExampleDoc("ron eval 2^3^4", "2^3^4 => 2.4178516392292583e+24", "left associativity of exponents")
         .addExampleDoc("ron eval 2 - 3 - 4", "2 - 3 - 4 => -5", "right associativity of common binary operators")
-        .addExampleDoc("ron eval log(e^pi)", "log(e^pi) => 3.141592653589793", "supports these constants and log")
+        .addExampleDoc("ron eval log(e^pi)", "log(e^pi) => 3.141592653589793", "support these constants and log")
         .addExampleDoc("ron eval tanpi", "tanpi => -1.2246467991473532e-16", "support common trig operators")
         .addExampleDoc("ron eval banana", "banana => null", "invalid expression")
+        .addExampleDoc("ron eval 3 * 4^log", "3 * 4^log => null", "another invalid expression")
         .build();
     }
     getCommandName(): string {

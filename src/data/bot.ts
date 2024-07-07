@@ -5,6 +5,8 @@ import { MessageCreateHandler } from "../events/message_create_handler.js";
 import { CommandBuilder } from "./cmd_manager.js";
 import { PingCommand } from "../cmds/ping.js";
 import { EvalCommand } from "../cmds/eval.js";
+import { TestCommand } from "../cmds/test.js";
+import { RiichiDbCommand } from "../cmds/riichidb.js";
 
 export class Bot {
     private token: string | undefined;
@@ -13,7 +15,9 @@ export class Bot {
     constructor(_token: string | undefined) {
         let commands : CommandBuilder[] = [
             new PingCommand(),
-            new EvalCommand()
+            new EvalCommand(),
+            new TestCommand(),
+            new RiichiDbCommand()
         ]
         let events : EventBuilder[] = [
             new ClientReadyHandler(),
