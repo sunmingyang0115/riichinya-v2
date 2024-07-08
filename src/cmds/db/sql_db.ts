@@ -1,5 +1,6 @@
 import { symlinkSync } from "fs";
 import sqlite3, { LIMIT_LIKE_PATTERN_LENGTH } from "sqlite3";
+import { SQLMap } from "./sql_map";
 sqlite3.verbose()
 
 const db = new sqlite3.Database('rdb.sql');
@@ -56,27 +57,58 @@ export class RiichiDatabase {
         })
     }
 
-    static insertData(id : string, data : {id : string, score : number}[]) {
+    static insertData(id : string, data : SQLMap) {
         let stmt : string[] = [];
         let curtime = date.getTime().toString();
         stmt.push(id);
         stmt.push(curtime);
-        for (let i = 0; i < 4; i++) {
+        for (let i = 1; i < 5; i++) {
             let pair = data[i];
             stmt.push(pair.id.toString());
-            stmt.push(pair.score.toString());
-            db.run(`INSERT INTO playerdata (id, scores, ranks, games_played) VALUES (${pair.id}, ${pair.score}, ${i}, ${1}) 
+            stmt.push(pair.value.toString());
+            db.run(`INSERT INTO playerdata (id, scores, ranks, games_played) VALUES (${pair.id}, ${pair.value}, ${i}, ${1}) 
                 ON CONFLICT (id) DO UPDATE SET 
-                scores = scores + ${pair.score},
+                scores = scores + ${pair.value},
                 ranks = ranks + ${i},
                 games_played = games_played + ${1}`);
         }
         db.run(`INSERT INTO gamedata (id, date, player_id1, score1, player_id2, score2, player_id3, score3, player_id4, score4) VALUES (${stmt.join(", ")})`);
     }
 
-    getLBAveragePlacement() : {id: number; value: number}[] {
-        return [{id:1,value:1}]
+    static getLBAveragePlacement(n : number, callback : (data : SQLMap) => void) {
+        this.queryHelper(`SELECT id,
+            ranks / games_played AS value
+            FROM playerdata
+            ORDER BY value ASC
+            LIMIT ${n}`, callback);
+    }
+    static getLBScore(n : number, callback : (data : SQLMap) => void) {
+        this.queryHelper(`SELECT id,
+            scores As value
+            FROM playerdata
+            ORDER BY value DESC
+            LIMIT ${n}`, callback);
+    }
+    static getLBAverageScore(n : number, callback : (data : SQLMap) => void) {
+        this.queryHelper(`SELECT id,
+            scores / games_played AS value
+            FROM playerdata
+            ORDER BY value DESC
+            LIMIT ${n}`, callback);
+    }
+    static getLBGamesPlayed(n : number, callback : (data : SQLMap) => void) {
+        this.queryHelper(`SELECT id,
+            games_played As value
+            FROM playerdata
+            ORDER BY value DESC
+            LIMIT ${n}`, callback);
     }
 
+    private static queryHelper(cmd : string, callback : (data : SQLMap) => void) {
+        db.all(cmd, [], (err, rows : SQLMap) => {
+                if (err) console.error(err);
+                callback(rows);
+            });
+    }
 
 }
