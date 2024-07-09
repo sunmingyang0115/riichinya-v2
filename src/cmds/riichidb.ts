@@ -2,7 +2,7 @@ import { Message } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder } from "../data/doc_manager";
 import { RiichiDatabase } from "./db/sql_db";
-import { SQLMap } from "./db/sql_map";
+import { rdbGameInfo, rdbPlayerInfo, SQLMap } from "./db/sql_db_data";
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
@@ -22,7 +22,7 @@ export class RiichiDbCommand implements CommandBuilder {
         } else if (args[0] == 'insert') {
             RiichiDatabase.insertData(event.id, this.parser(args.slice(1)))
         } else if (args[0] == 'lb') {
-            let reply = (res : {id: number; value: number}[]) => event.reply(JSON.stringify(res));
+            let reply = (res : SQLMap) => event.reply(JSON.stringify(res));
             let amount = Number(args[2]);
             if (args[1] == 'avg_rank') {
                 RiichiDatabase.getLBAveragePlacement(amount, reply);
@@ -32,6 +32,18 @@ export class RiichiDbCommand implements CommandBuilder {
                 RiichiDatabase.getLBAverageScore(amount, reply);
             } else if (args[1] == 'games_played') {
                 RiichiDatabase.getLBGamesPlayed(amount, reply);
+            } else if (args[1] == 'recent_games') {
+                RiichiDatabase.getLBRecentGames(amount, reply);
+            }
+        } else if (args[0] == 'id') {
+            let id = args[2];
+            console.log(id);
+            if (args[1] == 'player') {
+                let user_reply = (res : rdbPlayerInfo) => event.reply(JSON.stringify(res));
+                RiichiDatabase.getPlayerProfile(id, user_reply);
+            } else if (args[1] == 'game') {
+                let game_reply = (res : rdbGameInfo) => event.reply(JSON.stringify(res));
+                RiichiDatabase.getGameProfile(id, game_reply);
             }
         }
     }
@@ -47,7 +59,7 @@ export class RiichiDbCommand implements CommandBuilder {
     private parser(args : string[]) : SQLMap {
         let parsed : SQLMap = [];
         for (let i = 0; i < args.length; i+=2) {
-            parsed.push({id: Number(args[i]), value: Number(args[i+1])});
+            parsed.push({id: args[i], value: Number(args[i+1])});
         }
         this.formatScores(parsed);
         this.adjustScoreAndSort(parsed);
@@ -83,7 +95,7 @@ export class RiichiDbCommand implements CommandBuilder {
         let starting_score = 25000;
         let uma = [15, 5, -5, -15];
         console.log(parsed);
-        parsed.map((e, i) => parsed[i].value = e.value + 1000 * uma[i] + starting_score);
+        parsed.map((e, i) => parsed[i].value = e.value + 1000 * uma[i] - starting_score);
         console.log(parsed);
         return parsed;
     }

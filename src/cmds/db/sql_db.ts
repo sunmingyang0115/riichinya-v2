@@ -1,6 +1,6 @@
 import { symlinkSync } from "fs";
 import sqlite3, { LIMIT_LIKE_PATTERN_LENGTH } from "sqlite3";
-import { SQLMap } from "./sql_map";
+import { rdbGameInfo, rdbPlayerInfo, SQLMap } from "./sql_db_data";
 sqlite3.verbose()
 
 const db = new sqlite3.Database('rdb.sql');
@@ -39,18 +39,18 @@ export class RiichiDatabase {
     static init() {
         db.serialize(() => {
             db.run(`CREATE TABLE IF NOT EXISTS gamedata 
-                (id             INTEGER NOT NULL UNIQUE, 
+                (id             TEXT NOT NULL UNIQUE, 
                 date            INTEGER NOT NULL, 
-                player_id1      INTEGER NOT NULL, 
-                player_id2      INTEGER NOT NULL, 
-                player_id3      INTEGER NOT NULL, 
-                player_id4      INTEGER NOT NULL, 
+                player_id1      TEXT NOT NULL, 
+                player_id2      TEXT NOT NULL, 
+                player_id3      TEXT NOT NULL, 
+                player_id4      TEXT NOT NULL, 
                 score1          INTEGER NOT NULL, 
                 score2          INTEGER NOT NULL, 
                 score3          INTEGER NOT NULL, 
                 score4          INTEGER NOT NULL)`);
             db.run(`CREATE TABLE IF NOT EXISTS playerdata 
-                (id             INTEGER NOT NULL UNIQUE ,
+                (id             TEXT NOT NULL UNIQUE ,
                 scores          INTEGER NOT NULL, 
                 ranks           INTEGER NOT NULL, 
                 games_played    INTEGER NOT NULL)`);
@@ -62,11 +62,12 @@ export class RiichiDatabase {
         let curtime = date.getTime().toString();
         stmt.push(id);
         stmt.push(curtime);
-        for (let i = 1; i < 5; i++) {
+        console.log(data);
+        for (let i = 0; i < 4; i++) {
             let pair = data[i];
             stmt.push(pair.id.toString());
             stmt.push(pair.value.toString());
-            db.run(`INSERT INTO playerdata (id, scores, ranks, games_played) VALUES (${pair.id}, ${pair.value}, ${i}, ${1}) 
+            db.run(`INSERT INTO playerdata (id, scores, ranks, games_played) VALUES (${pair.id}, ${pair.value}, ${i+1}, ${1}) 
                 ON CONFLICT (id) DO UPDATE SET 
                 scores = scores + ${pair.value},
                 ranks = ranks + ${i},
@@ -84,31 +85,65 @@ export class RiichiDatabase {
     }
     static getLBScore(n : number, callback : (data : SQLMap) => void) {
         this.queryHelper(`SELECT id,
-            scores As value
+            scores / 1000.0 AS value
             FROM playerdata
             ORDER BY value DESC
             LIMIT ${n}`, callback);
     }
     static getLBAverageScore(n : number, callback : (data : SQLMap) => void) {
         this.queryHelper(`SELECT id,
-            scores / games_played AS value
+            scores / games_played / 1000.0 AS value
             FROM playerdata
             ORDER BY value DESC
             LIMIT ${n}`, callback);
     }
     static getLBGamesPlayed(n : number, callback : (data : SQLMap) => void) {
         this.queryHelper(`SELECT id,
-            games_played As value
+            games_played AS value
             FROM playerdata
             ORDER BY value DESC
             LIMIT ${n}`, callback);
     }
+    static getLBRecentGames(n : number, callback : (data : SQLMap) => void) {
+        this.queryHelper(`SELECT id,
+            date AS value
+            FROM gamedata
+            ORDER BY date DESC
+            LIMIT ${n}`, callback);
+    }
 
-    private static queryHelper(cmd : string, callback : (data : SQLMap) => void) {
-        db.all(cmd, [], (err, rows : SQLMap) => {
+    static getPlayerProfile(id : string, callback : (data : rdbPlayerInfo) => void) {
+        this.queryHelper<rdbPlayerInfo>(`SELECT id,
+            scores / 1000.0 AS total_scores,
+            scores / 1000.0 / games_played AS avg_score,
+            ranks / games_played AS avg_rank,
+            games_played
+            FROM playerdata
+            WHERE id = ${id}`, callback);
+    }
+
+    static getGameProfile(id : string, callback : (data : rdbGameInfo) => void) {
+        this.queryHelper<rdbGameInfo>(`SELECT id,
+            date,
+            player_id1,
+            player_id2,
+            player_id3,
+            player_id4,
+            score1 / 1000.0 AS score1,
+            score2 / 1000.0 AS score2,
+            score3 / 1000.0 AS score3,
+            score4 / 1000.0 AS score4
+            FROM gamedata
+            WHERE id = ${id}`, callback);
+    }
+
+    private static queryHelper<T>(cmd : string, callback : (data : T) => void) {
+        db.all(cmd, [], (err : Error | null, rows : T) => {
                 if (err) console.error(err);
+                console.log(rows);
                 callback(rows);
             });
+            
     }
 
 }
