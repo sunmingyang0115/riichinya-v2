@@ -1,10 +1,14 @@
-import { symlinkSync } from "fs";
-import sqlite3, { LIMIT_LIKE_PATTERN_LENGTH } from "sqlite3";
-import { rdbGameInfo, rdbPlayerInfo, SQLMap } from "./sql_db_data";
+
+import sqlite3 from "sqlite3";
 sqlite3.verbose()
 
 const db = new sqlite3.Database('rdb.sql');
 const date = new Date();
+
+export type GameInfo = {
+    id : string,
+    value : number
+}[];
 
 export class RiichiDatabase {
         
@@ -57,12 +61,12 @@ export class RiichiDatabase {
         })
     }
 
-    static insertData(id : string, data : SQLMap) {
+    static insertData(id : string, data : GameInfo) {
         let stmt : string[] = [];
         let curtime = date.getTime().toString();
         stmt.push(id);
         stmt.push(curtime);
-        console.log(data);
+        // console.log(data);
         for (let i = 0; i < 4; i++) {
             let pair = data[i];
             stmt.push(pair.id.toString());
@@ -76,44 +80,44 @@ export class RiichiDatabase {
         db.run(`INSERT INTO gamedata (id, date, player_id1, score1, player_id2, score2, player_id3, score3, player_id4, score4) VALUES (${stmt.join(", ")})`);
     }
 
-    static getLBAveragePlacement(n : number, callback : (data : SQLMap) => void) {
+    static getLBAveragePlacement(n : number, callback : (data : object[]) => void) {
         this.queryHelper(`SELECT id,
-            ranks / games_played AS value
+            ranks / games_played AS avg_rank
             FROM playerdata
-            ORDER BY value ASC
+            ORDER BY avg_rank ASC
             LIMIT ${n}`, callback);
     }
-    static getLBScore(n : number, callback : (data : SQLMap) => void) {
+    static getLBScore(n : number, callback : (data : object[]) => void) {
         this.queryHelper(`SELECT id,
-            scores / 1000.0 AS value
+            scores / 1000.0 AS total_scores
             FROM playerdata
-            ORDER BY value DESC
+            ORDER BY total_scores DESC
             LIMIT ${n}`, callback);
     }
-    static getLBAverageScore(n : number, callback : (data : SQLMap) => void) {
+    static getLBAverageScore(n : number, callback : (data : object[]) => void) {
         this.queryHelper(`SELECT id,
-            scores / games_played / 1000.0 AS value
+            scores / games_played / 1000.0 AS avg_scores
             FROM playerdata
-            ORDER BY value DESC
+            ORDER BY avg_scores DESC
             LIMIT ${n}`, callback);
     }
-    static getLBGamesPlayed(n : number, callback : (data : SQLMap) => void) {
+    static getLBGamesPlayed(n : number, callback : (data : object[]) => void) {
         this.queryHelper(`SELECT id,
-            games_played AS value
+            games_played AS games_played
             FROM playerdata
-            ORDER BY value DESC
+            ORDER BY games_played DESC
             LIMIT ${n}`, callback);
     }
-    static getLBRecentGames(n : number, callback : (data : SQLMap) => void) {
+    static getLBRecentGames(n : number, callback : (data : object[]) => void) {
         this.queryHelper(`SELECT id,
-            date AS value
+            date AS date
             FROM gamedata
             ORDER BY date DESC
             LIMIT ${n}`, callback);
     }
 
-    static getPlayerProfile(id : string, callback : (data : rdbPlayerInfo) => void) {
-        this.queryHelper<rdbPlayerInfo>(`SELECT id,
+    static getPlayerProfile(id : string, callback : (data : object[]) => void) {
+        this.queryHelper(`SELECT id,
             scores / 1000.0 AS total_scores,
             scores / 1000.0 / games_played AS avg_score,
             ranks / games_played AS avg_rank,
@@ -122,8 +126,8 @@ export class RiichiDatabase {
             WHERE id = ${id}`, callback);
     }
 
-    static getGameProfile(id : string, callback : (data : rdbGameInfo) => void) {
-        this.queryHelper<rdbGameInfo>(`SELECT id,
+    static getGameProfile(id : string, callback : (data : object[]) => void) {
+        this.queryHelper(`SELECT id,
             date,
             player_id1,
             player_id2,
@@ -137,10 +141,10 @@ export class RiichiDatabase {
             WHERE id = ${id}`, callback);
     }
 
-    private static queryHelper<T>(cmd : string, callback : (data : T) => void) {
-        db.all(cmd, [], (err : Error | null, rows : T) => {
+    private static queryHelper(cmd : string, callback : (data : object[]) => void) {
+        db.all(cmd, [], (err : Error | null, rows : object[]) => {
                 if (err) console.error(err);
-                console.log(rows);
+                // console.log(rows);
                 callback(rows);
             });
             
