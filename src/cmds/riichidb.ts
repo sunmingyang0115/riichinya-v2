@@ -1,9 +1,10 @@
-import { Message, EmbedBuilder, Client } from "discord.js";
+import { Message, Client, AttachmentBuilder } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder } from "../data/doc_manager";
 import { RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
 import { EmbedManager } from "../data/embed_manager";
+import { parse } from "json2csv";
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
@@ -17,8 +18,6 @@ export class RiichiDbCommand implements CommandBuilder {
     }
     async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
         let a : Client = event.client;
-
-        if (event.author.username != "iamthesenate_69") return;
 
         let reply = (tbl : object[]) => {
             console.log(tbl);
@@ -54,7 +53,13 @@ export class RiichiDbCommand implements CommandBuilder {
             } else if (args[1] == 'game') {
                 reply(await RiichiDatabase.getGameProfile(id));
             }
-        } 
+        } else if (args[0] == 'csv') {
+            let data = await RiichiDatabase.getEntireDB();
+            // gpt code 
+            const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("gamedata.csv");
+            const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("playerdata.csv");
+            event.reply({files : [playerdata, gamedata]});
+        }
     }
 
 

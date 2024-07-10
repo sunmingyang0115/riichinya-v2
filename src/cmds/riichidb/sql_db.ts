@@ -163,4 +163,11 @@ export class RiichiDatabase {
         return await this.db!.all(cmd);
     }
 
+    static async getEntireDB() {
+        if (this.db == null) await this.init();
+        let gamedata = await this.queryHelper(`SELECT * FROM gamedata`);
+        let playerdata = await this.queryHelper(`SELECT * FROM playerdata`);
+        return [gamedata, playerdata];
+    }
+
 }
