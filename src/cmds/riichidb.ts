@@ -15,12 +15,13 @@ export class RiichiDbCommand implements CommandBuilder {
     getCooldown(): number {
         return 10;
     }
-    runCommand(event: Message<boolean>, args: string[]): void {
+    async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
         let a : Client = event.client;
 
         if (event.author.username != "iamthesenate_69") return;
 
         let reply = (tbl : object[]) => {
+            console.log(tbl);
             let eb = new EmbedManager(this.getCommandName(), event.client);
             eb.addObjectArrayToField(tbl)
             event.reply({embeds: [eb]});
@@ -35,23 +36,23 @@ export class RiichiDbCommand implements CommandBuilder {
             let amount = Number(args[2]);
             if (Number.isNaN(amount)) amount = 10;
             if (args[1] == 'avg_rank') {
-                RiichiDatabase.getLBAveragePlacement(amount, reply);
+                reply(await RiichiDatabase.getLBAveragePlacement(amount));
             } else if (args[1] == 'total_score') {
-                RiichiDatabase.getLBScore(amount, reply);
+                reply(await RiichiDatabase.getLBScore(amount));
             } else if (args[1] == 'avg_score') {
-                RiichiDatabase.getLBAverageScore(amount, reply);
+                reply(await RiichiDatabase.getLBAverageScore(amount));
             } else if (args[1] == 'games_played') {
-                RiichiDatabase.getLBGamesPlayed(amount, reply);
+                reply(await RiichiDatabase.getLBGamesPlayed(amount));
             } else if (args[1] == 'recent_games') {
-                RiichiDatabase.getLBRecentGames(amount, reply);
+                reply(await RiichiDatabase.getLBRecentGames(amount));
             }
         } else if (args[0] == 'id') {
             let id = args[2];
             // console.log(id);
             if (args[1] == 'player') {
-                RiichiDatabase.getPlayerProfile(id, reply);
+                reply(await RiichiDatabase.getPlayerProfile(id));
             } else if (args[1] == 'game') {
-                RiichiDatabase.getGameProfile(id, reply);
+                reply(await RiichiDatabase.getGameProfile(id));
             }
         } 
     }

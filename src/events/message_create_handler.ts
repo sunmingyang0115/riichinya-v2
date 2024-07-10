@@ -13,12 +13,12 @@ export class MessageCreateHandler implements EventBuilder {
     getEventType(): string {
         return Events.MessageCreate;
     }
-    getEventCallFunction(m : Message) {
+    async getEventCallFunction(m : Message) {
         if (m.author.bot) return;
         let frag = m.content.split(/[ ,]+/);
 
         if (frag[0] == "ron" && this.messageMap.has(frag[1])) {
-            this.messageMap.get(frag[1])!.runCommand(m, frag.slice(2));
+            await this.messageMap.get(frag[1])!.runCommand(m, frag.slice(2));
         }
         //  else if (frag[0] == "ron-help" && (frag.length == 1 || frag[1] == "readme")) {
         //     let builder : string[] = [

@@ -25,7 +25,7 @@ export class EmbedManager extends EmbedBuilder {
         let cols = Object.values(ob[0]).length;
 
         for (var col = 0; col < cols; col++) {
-            let label = Object.keys(ob[0])[col];
+            let label = labels[col];
             let out : any[] = [];
             for (var row = 0; row < ob.length; row++) {
                 out.push(this.format(Object.values(ob[row])[col], label));
