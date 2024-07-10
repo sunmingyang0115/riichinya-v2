@@ -1,6 +1,7 @@
 import { CommandBuilder } from "../data/cmd_manager";
 import { EventBuilder } from "../data/event_manager";
 import { Events, Message } from "discord.js"
+import BotProperties from '../../bot_properties.json'
 
 export class MessageCreateHandler implements EventBuilder {
     private messageMap : Map<string, CommandBuilder>;
@@ -17,8 +18,8 @@ export class MessageCreateHandler implements EventBuilder {
         if (m.author.bot) return;
         let frag = m.content.split(/[ ,]+/);
 
-        if (frag[0] == "ron" && this.messageMap.has(frag[1])) {
-            await this.messageMap.get(frag[1])!.runCommand(m, frag.slice(2));
+        if (frag[0] == BotProperties.prefix && this.messageMap.has(frag[1])) {
+            this.messageMap.get(frag[1])!.runCommand(m, frag.slice(2));
         }
         //  else if (frag[0] == "ron-help" && (frag.length == 1 || frag[1] == "readme")) {
         //     let builder : string[] = [
@@ -36,7 +37,7 @@ export class MessageCreateHandler implements EventBuilder {
         //     ]
         //     m.reply(builder.join("\n"));
         // }
-         else if (frag[0] == "ron-help" && this.messageMap.has(frag[1])) {
+         else if (frag[0] == BotProperties.helpPrefix && this.messageMap.has(frag[1])) {
             m.reply(this.messageMap.get(frag[1])!.getDocumentation());
         }
     }

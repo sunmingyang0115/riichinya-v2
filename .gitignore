@@ -5,6 +5,7 @@
 *.sql
 package-lock.json
 yarn.lock
+bot_properties.json
 
 # folders
 build
