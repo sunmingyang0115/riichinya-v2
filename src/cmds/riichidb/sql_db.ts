@@ -81,36 +81,36 @@ export class RiichiDatabase {
     }
 
     static getLBAveragePlacement(n : number, callback : (data : object[]) => void) {
-        this.queryHelper(`SELECT id,
+        this.queryHelper(`SELECT id AS player_id,
             ranks / games_played AS avg_rank
             FROM playerdata
             ORDER BY avg_rank ASC
             LIMIT ${n}`, callback);
     }
     static getLBScore(n : number, callback : (data : object[]) => void) {
-        this.queryHelper(`SELECT id,
+        this.queryHelper(`SELECT id AS player_id,
             scores / 1000.0 AS total_scores
             FROM playerdata
             ORDER BY total_scores DESC
             LIMIT ${n}`, callback);
     }
     static getLBAverageScore(n : number, callback : (data : object[]) => void) {
-        this.queryHelper(`SELECT id,
+        this.queryHelper(`SELECT id AS player_id,
             scores / games_played / 1000.0 AS avg_scores
             FROM playerdata
             ORDER BY avg_scores DESC
             LIMIT ${n}`, callback);
     }
     static getLBGamesPlayed(n : number, callback : (data : object[]) => void) {
-        this.queryHelper(`SELECT id,
-            games_played AS games_played
+        this.queryHelper(`SELECT id AS player_id,
+            games_played
             FROM playerdata
             ORDER BY games_played DESC
             LIMIT ${n}`, callback);
     }
     static getLBRecentGames(n : number, callback : (data : object[]) => void) {
-        this.queryHelper(`SELECT id,
-            date AS date
+        this.queryHelper(`SELECT id AS game_id,
+            date
             FROM gamedata
             ORDER BY date DESC
             LIMIT ${n}`, callback);

@@ -1,4 +1,4 @@
-import { Client } from "discord.js"
+import { Client, Routes, ContextMenuCommandBuilder, ApplicationCommandType } from "discord.js"
 import { EventBuilder } from "./event_manager.js";
 import { ClientReadyHandler } from "../events/client_ready_handler.js";
 import { MessageCreateHandler } from "../events/message_create_handler.js";
@@ -7,6 +7,7 @@ import { PingCommand } from "../cmds/ping.js";
 import { EvalCommand } from "../cmds/eval.js";
 import { TestCommand } from "../cmds/test.js";
 import { RiichiDbCommand } from "../cmds/riichidb.js";
+import { InteractionHandler } from "../events/interaction_handler.js";
 
 export class Bot {
     private token: string | undefined;
@@ -21,7 +22,8 @@ export class Bot {
         ];
         let events : EventBuilder[] = [
             new ClientReadyHandler(),
-            new MessageCreateHandler(commands)
+            new MessageCreateHandler(commands),
+            new InteractionHandler()
         ];
         this.token = _token;
         this.client = new Client({ intents: ['Guilds', 'GuildMessages', 'MessageContent'] });

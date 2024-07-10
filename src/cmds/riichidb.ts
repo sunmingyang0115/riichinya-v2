@@ -1,9 +1,9 @@
-import { Message, EmbedBuilder } from "discord.js";
+import { Message, EmbedBuilder, Client } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder } from "../data/doc_manager";
-import { GameInfo, RiichiDatabase } from "./riichidb/sql_db";
+import { RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
-import { copyFileSync } from "fs";
+import { EmbedManager } from "../data/embed_manager";
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
@@ -16,11 +16,13 @@ export class RiichiDbCommand implements CommandBuilder {
         return 10;
     }
     runCommand(event: Message<boolean>, args: string[]): void {
+        let a : Client = event.client;
+
         if (event.author.username != "iamthesenate_69") return;
 
         let reply = (tbl : object[]) => {
-            let eb = new EmbedBuilder();
-            this.addObjectArrayToField(eb, tbl)
+            let eb = new EmbedManager(this.getCommandName(), event.client);
+            eb.addObjectArrayToField(tbl)
             event.reply({embeds: [eb]});
         };
 
@@ -51,50 +53,11 @@ export class RiichiDbCommand implements CommandBuilder {
             } else if (args[1] == 'game') {
                 RiichiDatabase.getGameProfile(id, reply);
             }
-        } else if (args[0] == 'test') {
-            RiichiDatabase.getLBRecentGames(10, (tbl : object[]) => {
-                let eb = new EmbedBuilder();
-                this.addObjectArrayToField(eb, tbl)
-                event.reply({embeds: [eb]});
-            });
-        }
+        } 
     }
 
 
-    private addObjectArrayToField(eb : EmbedBuilder, ob : object[]) : EmbedBuilder {
-        if (ob.length == 0) return eb;
-
-        let labels = Object.keys(ob[0]);
-        let cols = Object.values(ob[0]).length;
-
-        for (var col = 0; col < cols; col++) {
-            let label = Object.keys(ob[0])[col];
-            let out : any[] = [];
-            for (var row = 0; row < ob.length; row++) {
-                out.push(this.format(Object.values(ob[row])[col], label));
-            }
-            // console.log(out)
-            eb.addFields({name: label, value : out.join('\n'), inline: true});
-        }
-        return eb;
-    }
-
-    private format(t : object, label : string) : any {
-        if (label.startsWith("player_id")) {
-            console.log(`<@${t}>`)  
-            return `<@${t}>`;
-        } else if (label.startsWith("date")) {
-            let date = new Date(Number(`${t}`));
-            let year = date.getFullYear();
-            let month = String(date.getMonth() + 1).padStart(2, '0');
-            let day = String(date.getDate()).padStart(2, '0');
-            let hours = String(date.getHours()).padStart(2, '0');
-            let minutes = String(date.getMinutes()).padStart(2, '0');
-            let seconds = String(date.getSeconds()).padStart(2, '0');
-            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-        }
-        return t;
-    } 
+    
 
 
 
