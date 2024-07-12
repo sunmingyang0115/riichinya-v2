@@ -50,5 +50,15 @@ export class EmbedManager extends EmbedBuilder {
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         }
         return t;
-    } 
+    }
+    
+    static createErrorEmbed(error : any, profile : Client) : EmbedBuilder {
+        let eb = new EmbedManager(":(", profile);
+        if (error instanceof Error) {
+            eb.addFields({name : error.name, value : error.message});
+        } else {
+            eb.setDescription("Cannot generate error message");
+        }
+        return eb;
+    }
 }

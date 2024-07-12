@@ -29,7 +29,7 @@ export class RiichiDbCommand implements CommandBuilder {
         if (args[0] == 'init') {
             RiichiDatabase.init();
         } else if (args[0] == 'insert') {
-            RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)))
+            await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
         } else if (args[0] == 'lb') {
             // let reply = (res : object[]) => event.reply(JSON.stringify(res));
             let amount = Number(args[2]);

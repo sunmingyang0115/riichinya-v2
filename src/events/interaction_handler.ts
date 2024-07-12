@@ -1,4 +1,4 @@
-import { error } from "console";
+
 import { parseScoreFromRaw } from "../cmds/riichidb/score_parser";
 import { RiichiDatabase } from "../cmds/riichidb/sql_db";
 import { EmbedManager } from "../data/embed_manager";
@@ -17,14 +17,15 @@ export class InteractionHandler implements EventBuilder {
         let str = interaction.targetMessage.content;
         let splice = str.replace(/<@|>/g, "").split(/\s+/g);
         let content = `Successful ${interaction.targetMessage.id!}`;
-        RiichiDatabase.insertData(interaction.targetMessage.id!, parseScoreFromRaw(splice));
-
-
-        await interaction.reply({
-            embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
-            ephemeral: true
-        });
-        
-        
+        try {
+            await RiichiDatabase.insertData(interaction.targetMessage.id!, parseScoreFromRaw(splice));
+            await interaction.reply({
+                embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
+                ephemeral: true
+            });
+        } catch (e : any) {
+            await interaction.reply({embeds : [EmbedManager.createErrorEmbed(e, interaction.client)]});
+        }
+    
     }
 }

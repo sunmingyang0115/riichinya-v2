@@ -7,6 +7,13 @@ const riichinya = new Bot(process.env.TOKEN);
 restShenanigans();
 riichinya.run();
 
+// error handling
+// i tryed try/catching with await; it catches the error, but js still crashes
+// this is the only option that worked for me that doesnt end in a crash
+process.on('unhandledRejection', (error) => {
+    console.error('Unhandled Error', error);
+});
+
 async function restShenanigans() {
     const commandData = [
         new ContextMenuCommandBuilder()
