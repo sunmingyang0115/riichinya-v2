@@ -29,23 +29,23 @@ export class RiichiDbCommand implements CommandBuilder {
         if (args[0] == 'init') {
             RiichiDatabase.init();
         } else if (args[0] == 'insert') {
-            await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
-        } else if (args[0] == 'lb') {
+            // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
+        } else if (args[0] == 'list') {
             // let reply = (res : object[]) => event.reply(JSON.stringify(res));
             let amount = Number(args[2]);
             if (Number.isNaN(amount)) amount = 10;
-            if (args[1] == 'avg_rank') {
+            if (args[1] == 'rank_average' || args[1] == 'ra') {
                 reply(await RiichiDatabase.getLBAveragePlacement(amount));
-            } else if (args[1] == 'total_score') {
+            } else if (args[1] == 'score_total' || args[1] == 'st') {
                 reply(await RiichiDatabase.getLBScore(amount));
-            } else if (args[1] == 'avg_score') {
+            } else if (args[1] == 'score_average' || args[1] == 'sa') {
                 reply(await RiichiDatabase.getLBAverageScore(amount));
-            } else if (args[1] == 'games_played') {
+            } else if (args[1] == 'game_total' || args[1] == 'gt') {
                 reply(await RiichiDatabase.getLBGamesPlayed(amount));
-            } else if (args[1] == 'recent_games') {
+            } else if (args[1] == 'game_recent' || args[1] == 'gr') {
                 reply(await RiichiDatabase.getLBRecentGames(amount));
             }
-        } else if (args[0] == 'id') {
+        } else if (args[0] == 'get') {
             let id = args[2];
             // console.log(id);
             if (args[1] == 'player') {
@@ -56,8 +56,8 @@ export class RiichiDbCommand implements CommandBuilder {
         } else if (args[0] == 'csv') {
             let data = await RiichiDatabase.getEntireDB();
             // gpt code 
-            const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("gamedata.csv");
-            const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("playerdata.csv");
+            const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("DataGame.csv");
+            const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("DataPlayer.csv");
             event.reply({files : [playerdata, gamedata]});
         }
     }

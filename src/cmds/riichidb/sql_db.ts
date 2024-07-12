@@ -49,23 +49,23 @@ export class RiichiDatabase {
     static async init() {
         this.db = await this.openDB();
         await this.db!.run(`
-            CREATE TABLE IF NOT EXISTS gamedata 
-            (id             TEXT NOT NULL UNIQUE, 
+            CREATE TABLE IF NOT EXISTS DataGame 
+            (id_game        TEXT NOT NULL UNIQUE, 
             date            INTEGER NOT NULL, 
-            player_id1      TEXT NOT NULL, 
-            player_id2      TEXT NOT NULL, 
-            player_id3      TEXT NOT NULL, 
-            player_id4      TEXT NOT NULL, 
-            score1          INTEGER NOT NULL, 
-            score2          INTEGER NOT NULL, 
-            score3          INTEGER NOT NULL, 
-            score4          INTEGER NOT NULL)`);
+            id_player_1     TEXT NOT NULL, 
+            id_player_2     TEXT NOT NULL, 
+            id_player_3     TEXT NOT NULL, 
+            id_player_4     TEXT NOT NULL, 
+            score_1         INTEGER NOT NULL, 
+            score_2         INTEGER NOT NULL, 
+            score_3         INTEGER NOT NULL, 
+            score_4         INTEGER NOT NULL)`);
         await this.db!.run(`
-            CREATE TABLE IF NOT EXISTS playerdata 
-            (id             TEXT NOT NULL UNIQUE ,
-            scores          INTEGER NOT NULL, 
-            ranks           INTEGER NOT NULL, 
-            games_played    INTEGER NOT NULL)`);
+            CREATE TABLE IF NOT EXISTS DataPlayer 
+            (id_player      TEXT NOT NULL UNIQUE ,
+            score_total     INTEGER NOT NULL, 
+            rank_total      INTEGER NOT NULL, 
+            game_total      INTEGER NOT NULL)`);
     }
 
     static async insertData(id: string, data: GameInfo) {
@@ -81,81 +81,81 @@ export class RiichiDatabase {
             stmt.push(pair.id.toString());
             stmt.push(pair.value.toString());
             this.db!.run(`
-                INSERT INTO playerdata (id, scores, ranks, games_played) VALUES (${pair.id}, ${pair.value}, ${i + 1}, ${1}) 
-                ON CONFLICT (id) DO UPDATE SET 
-                scores = scores + ${pair.value},
-                ranks = ranks + ${i},
-                games_played = games_played + ${1}`);
+                INSERT INTO DataPlayer (id_player, score_total, rank_total, game_total) VALUES (${pair.id}, ${pair.value}, ${i + 1}, ${1}) 
+                ON CONFLICT (id_player) DO UPDATE SET 
+                score_total = score_total + ${pair.value},
+                rank_total = rank_total + ${i},
+                game_total = game_total + ${1}`);
         }
-        this.db!.run(`INSERT INTO gamedata (id, date, player_id1, score1, player_id2, score2, player_id3, score3, player_id4, score4) VALUES (${stmt.join(", ")})`);
+        this.db!.run(`INSERT INTO DataGame (id_game, date, id_player_1, score_1, id_player_2, score_2, id_player_3, score_3, id_player_4, score_4) VALUES (${stmt.join(", ")})`);
     }
 
     static async getLBAveragePlacement(n: number): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id AS player_id,
-            ranks / games_played AS avg_rank
-            FROM playerdata
-            ORDER BY avg_rank ASC
+            SELECT id_player,
+            rank_total / game_total AS rank_average
+            FROM DataPlayer
+            ORDER BY rank_average ASC
             LIMIT ${n}`);
     }
     static async getLBScore(n: number): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id AS player_id,
-            scores / 1000.0 AS total_scores
-            FROM playerdata
-            ORDER BY total_scores DESC
+            SELECT id_player,
+            score_total / 1000.0 AS score_total
+            FROM DataPlayer
+            ORDER BY score_total DESC
             LIMIT ${n}`);
     }
     static async getLBAverageScore(n: number): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id AS player_id,
-            scores / games_played / 1000.0 AS avg_scores
-            FROM playerdata
-            ORDER BY avg_scores DESC
+            SELECT id_player,
+            score_total / game_total / 1000.0 AS score_average
+            FROM DataPlayer
+            ORDER BY score_average DESC
             LIMIT ${n}`);
     }
     static async getLBGamesPlayed(n: number): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id AS player_id,
-            games_played
-            FROM playerdata
-            ORDER BY games_played DESC
+            SELECT id_player,
+            game_total
+            FROM DataPlayer
+            ORDER BY games_total DESC
             LIMIT ${n}`);
     }
     static async getLBRecentGames(n: number): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id AS game_id,
+            SELECT id_game,
             date
-            FROM gamedata
+            FROM DataGame
             ORDER BY date DESC
             LIMIT ${n}`);
     }
 
     static async getPlayerProfile(id: string): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id,
-            scores / 1000.0 AS total_scores,
-            scores / 1000.0 / games_played AS avg_score,
-            ranks / games_played AS avg_rank,
-            games_played
-            FROM playerdata
-            WHERE id = ${id}`);
+            SELECT id_player,
+            score_total / 1000.0 AS score_total,
+            score_total / 1000.0 / game_total AS score_average,
+            rank_total / game_total AS rank_average,
+            game_total
+            FROM DataPlayer
+            WHERE id_player = ${id}`);
     }
 
     static async getGameProfile(id: string): Promise<object[]> {
         return await this.queryHelper(`
-            SELECT id,
+            SELECT id_game,
             date,
-            player_id1,
-            player_id2,
-            player_id3,
-            player_id4,
-            score1 / 1000.0 AS score1,
-            score2 / 1000.0 AS score2,
-            score3 / 1000.0 AS score3,
-            score4 / 1000.0 AS score4
-            FROM gamedata
-            WHERE id = ${id}`);
+            id_player_1,
+            id_player_2,
+            id_player_3,
+            id_player_4,
+            score_1 / 1000.0 AS score_1,
+            score_2 / 1000.0 AS score_2,
+            score_3 / 1000.0 AS score_3,
+            score_4 / 1000.0 AS score_4
+            FROM DataGame
+            WHERE id_game = ${id}`);
     }
 
     static async queryHelper(cmd: string): Promise<object[]> {
@@ -165,8 +165,8 @@ export class RiichiDatabase {
 
     static async getEntireDB() {
         if (this.db == null) await this.init();
-        let gamedata = await this.queryHelper(`SELECT * FROM gamedata`);
-        let playerdata = await this.queryHelper(`SELECT * FROM playerdata`);
+        let gamedata = await this.queryHelper(`SELECT * FROM DataGame`);
+        let playerdata = await this.queryHelper(`SELECT * FROM DataPlayer`);
         return [gamedata, playerdata];
     }
 

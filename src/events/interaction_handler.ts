@@ -16,9 +16,10 @@ export class InteractionHandler implements EventBuilder {
 
         let str = interaction.targetMessage.content;
         let splice = str.replace(/<@|>/g, "").split(/\s+/g);
-        let content = `Successful ${interaction.targetMessage.id!}`;
+        let content = `Successful id:${interaction.targetMessage.id!}`;
         try {
             await RiichiDatabase.insertData(interaction.targetMessage.id!, parseScoreFromRaw(splice));
+            await interaction.targetMessage.react("📥");
             await interaction.reply({
                 embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
                 ephemeral: true

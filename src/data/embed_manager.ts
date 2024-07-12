@@ -36,7 +36,7 @@ export class EmbedManager extends EmbedBuilder {
     }
 
     private format(t : object, label : string) : any {
-        if (label.startsWith("player_id")) {
+        if (label.startsWith("id_player")) {
             console.log(`<@${t}>`)  
             return `<@${t}>`;
         } else if (label.startsWith("date")) {
@@ -48,6 +48,8 @@ export class EmbedManager extends EmbedBuilder {
             let minutes = String(date.getMinutes()).padStart(2, '0');
             let seconds = String(date.getSeconds()).padStart(2, '0');
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        } else if (label.startsWith("score")) {
+            return Number(`${t}`).toFixed(1);
         }
         return t;
     }
