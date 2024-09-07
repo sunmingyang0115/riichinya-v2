@@ -20,7 +20,7 @@ export class RiichiDbCommand implements CommandBuilder {
         let a : Client = event.client;
 
         let reply = (tbl : object[]) => {
-            console.log(tbl);
+            // console.log(tbl);
             let eb = new EmbedManager(this.getCommandName(), event.client);
             eb.addObjectArrayToField(tbl)
             event.reply({embeds: [eb]});
@@ -36,11 +36,15 @@ export class RiichiDbCommand implements CommandBuilder {
             if (Number.isNaN(amount)) amount = 10;
             if (args[1] == 'rank_average' || args[1] == 'ra') {
                 reply(await RiichiDatabase.getLBAveragePlacement(amount));
-            } else if (args[1] == 'score_total' || args[1] == 'st') {
+            } else if (args[1] == 'score_adj_total' || args[1] == 'sat') {
                 reply(await RiichiDatabase.getLBScore(amount));
-            } else if (args[1] == 'score_average' || args[1] == 'sa') {
+            } else if (args[1] == 'score_raw_total' || args[1] == 'srt') {
+                reply(await RiichiDatabase.getLBScoreRaw(amount));
+            } else if (args[1] == 'score_adj_average' || args[1] == 'saa') {
                 reply(await RiichiDatabase.getLBAverageScore(amount));
-            } else if (args[1] == 'game_total' || args[1] == 'gt') {
+            } else if (args[1] == 'score_raw_average' || args[1] == 'sra') {
+                reply(await RiichiDatabase.getLBAverageScoreRaw(amount));
+            }else if (args[1] == 'game_total' || args[1] == 'gt') {
                 reply(await RiichiDatabase.getLBGamesPlayed(amount));
             } else if (args[1] == 'game_recent' || args[1] == 'gr') {
                 reply(await RiichiDatabase.getLBRecentGames(amount));

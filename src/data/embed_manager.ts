@@ -26,7 +26,7 @@ export class EmbedManager extends EmbedBuilder {
 
         for (var col = 0; col < cols; col++) {
             let label = labels[col];
-            let out : any[] = [];
+            let out : unknown[] = [];
             for (var row = 0; row < ob.length; row++) {
                 out.push(this.format(Object.values(ob[row])[col], label));
             }
@@ -35,9 +35,10 @@ export class EmbedManager extends EmbedBuilder {
         return this;
     }
 
+    // worst code in the entire codebase
     private format(t : object, label : string) : any {
         if (label.startsWith("id_player")) {
-            console.log(`<@${t}>`)  
+            // console.log(`<@${t}>`)  
             return `<@${t}>`;
         } else if (label.startsWith("date")) {
             let date = new Date(Number(`${t}`));
