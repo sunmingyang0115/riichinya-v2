@@ -1,6 +1,6 @@
 import { Message, Client, AttachmentBuilder } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
-import { DocBuilder } from "../data/doc_manager";
+import { DocBuilder, ExpectedType } from "../data/doc_manager";
 import { RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
 import { EmbedManager } from "../data/embed_manager";
@@ -8,7 +8,64 @@ import { parse } from "json2csv";
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
-        return new DocBuilder().build();
+        return new DocBuilder()
+            .addSingleSubCom("ron", ExpectedType.LITERAL, "")
+            .addSingleSubCom("rdb", ExpectedType.LITERAL, "")
+            .beginMultiSubCom("list")
+            .insertMultiSubCom(ExpectedType.LITERAL, "lists rows of data based on folllowing subcategories")
+
+            .beginMultiSubCom("ra")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by rank average")
+            .back()
+
+            .beginMultiSubCom("sat")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by score (adjusted) as total")
+            .back()
+
+            .beginMultiSubCom("srt")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by score (raw) as total")
+            .back()
+
+            .beginMultiSubCom("saa")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by score (adjusted) as average")
+            .back()
+
+            .beginMultiSubCom("sra")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by score (raw) as average")
+            .back()
+
+            .beginMultiSubCom("gt")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by games played as total")
+            .back()
+
+            .beginMultiSubCom("gr")
+            .insertMultiSubCom(ExpectedType.LITERAL, "by recent games1")
+            .back()
+
+            .back()
+
+            .beginMultiSubCom("get")
+            .insertMultiSubCom(ExpectedType.LITERAL, "fetches a single data based on following subcategories")
+
+            .beginMultiSubCom("player")
+            .insertMultiSubCom(ExpectedType.LITERAL, "getting player data")
+            .addSingleSubCom("id", ExpectedType.DECIMAL, "id of player")
+            .back()
+            .back()
+
+            .beginMultiSubCom("game")
+            .insertMultiSubCom(ExpectedType.LITERAL, "getting game data")
+            .addSingleSubCom("id", ExpectedType.DECIMAL, "id of game")
+            .back()
+
+
+
+            .back()
+
+            .beginMultiSubCom("csv")
+            .insertMultiSubCom(ExpectedType.LITERAL, "")
+            .back()
+            .build();
     }
     getCommandName(): string {
         return "rdb"
@@ -17,13 +74,13 @@ export class RiichiDbCommand implements CommandBuilder {
         return 10;
     }
     async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
-        let a : Client = event.client;
+        let a: Client = event.client;
 
-        let reply = (tbl : object[]) => {
+        let reply = (tbl: object[]) => {
             // console.log(tbl);
             let eb = new EmbedManager(this.getCommandName(), event.client);
             eb.addObjectArrayToField(tbl)
-            event.reply({embeds: [eb]});
+            event.reply({ embeds: [eb] });
         };
 
         if (args[0] == 'init') {
@@ -44,7 +101,7 @@ export class RiichiDbCommand implements CommandBuilder {
                 reply(await RiichiDatabase.getLBAverageScore(amount));
             } else if (args[1] == 'score_raw_average' || args[1] == 'sra') {
                 reply(await RiichiDatabase.getLBAverageScoreRaw(amount));
-            }else if (args[1] == 'game_total' || args[1] == 'gt') {
+            } else if (args[1] == 'game_total' || args[1] == 'gt') {
                 reply(await RiichiDatabase.getLBGamesPlayed(amount));
             } else if (args[1] == 'game_recent' || args[1] == 'gr') {
                 reply(await RiichiDatabase.getLBRecentGames(amount));
@@ -62,12 +119,12 @@ export class RiichiDbCommand implements CommandBuilder {
             // gpt code 
             const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("DataGame.csv");
             const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("DataPlayer.csv");
-            event.reply({files : [playerdata, gamedata]});
+            event.reply({ files: [playerdata, gamedata] });
         }
     }
 
 
-    
+
 
 
 
