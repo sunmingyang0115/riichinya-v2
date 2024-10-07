@@ -1,6 +1,6 @@
 import { assert } from "console";
 import { GameInfo } from "./sql_db";
-const starting_score = 25000;
+const starting_score = 30000;
 const uma = [15, 5, -5, -15];
 
 /**

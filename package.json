@@ -4,6 +4,7 @@
   "description": "Declare Riichi as soon as possible. Fast attack for the win!",
   "main": "build/index.js",
   "scripts": {
+    "run": "tsx run src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node ."
