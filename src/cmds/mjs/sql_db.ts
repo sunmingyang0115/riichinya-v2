@@ -3,7 +3,7 @@ import { open, Database } from 'sqlite'
 
 export type UserIdData = {
     discordId: string,
-    mjsNickname: string,
+    mjsNickname?: string,
     amaeId: string
 }
 
@@ -55,6 +55,15 @@ export class UsersDatabase {
             Users(discord_id, mjs_nickname, amae_id)
             VALUES
             (?, ?, ?)`, discordId, mjsNickname, amaeId);
+
+        await stmt.run();
+    }
+
+    static async deleteUser(discordId: string) {
+        await this.init();
+        const stmt = await this.db!.prepare(`
+            DELETE FROM Users
+            WHERE discord_id=?`, discordId);
 
         await stmt.run();
     }

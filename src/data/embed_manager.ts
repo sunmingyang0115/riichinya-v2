@@ -58,6 +58,7 @@ export class EmbedManager extends EmbedBuilder {
     
     static createErrorEmbed(error : any, profile : Client) : EmbedBuilder {
         let eb = new EmbedManager(":(", profile);
+        console.error(error);
         if (error instanceof Error) {
             eb.addFields({name : error.name, value : error.message});
         } else if (error.hasOwnProperty("mjsErrorType")) {
