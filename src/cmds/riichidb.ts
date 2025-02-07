@@ -108,7 +108,10 @@ export class RiichiDbCommand implements CommandBuilder {
             }
         } else if (args[0] == 'get') {
             let id = args[2];
-            // console.log(id);
+            // check if provided id is comprised of numbers
+            if (!/^\d+$/.test(id)) {
+                throw Error("invalid player id");
+            }
             if (args[1] == 'player') {
                 reply(await RiichiDatabase.getPlayerProfile(id));
             } else if (args[1] == 'game') {
