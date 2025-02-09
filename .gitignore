@@ -3,6 +3,7 @@
 .env
 .env.local
 *.sql
+*.sqlite
 package-lock.json
 yarn.lock
 bot_properties.json
