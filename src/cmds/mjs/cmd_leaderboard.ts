@@ -22,22 +22,9 @@ export const leaderboardHandler = async (
 
     console.log(linkedAccounts);
 
-    const promises = linkedAccounts.map((user) => {
-      const majsoulUser = new MajsoulUser(user.amaeId);
-      return majsoulUser.fetchLightStats();
-    });
-
+    // Can be extended if needed to provide more sort options
     const sortOptions = {
       points: {
-        name: "Rank Points",
-        cmp: (a: MajsoulUser, b: MajsoulUser) => {
-          if (!a.rank || !b.rank) {
-            throw MJS_ERROR_TYPE.DATA_ERROR;
-          }
-          return b.rank.subtract(a.rank);
-        },
-      },
-      pts: {
         name: "Rank Points",
         cmp: (a: MajsoulUser, b: MajsoulUser) => {
           if (!a.rank || !b.rank) {
@@ -68,6 +55,12 @@ export const leaderboardHandler = async (
       sortKey = key as keyof typeof sortOptions;
     }
     
+    const promises = linkedAccounts.map((user) => {
+      const majsoulUser = new MajsoulUser(user.amaeId);
+      return majsoulUser.fetchLightStats();
+    });
+
+    // Fetch user data in parallel to save time
     const majsoulUsers = await Promise.all(promises);
 
     const table = new AsciiTable3()

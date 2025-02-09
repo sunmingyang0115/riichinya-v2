@@ -23,10 +23,19 @@ type StatConfig = {
   };
 };
 
+/**
+ * Stats come from either the playerStats API or extendedStats API
+ * This function defines the stats we want to show and gets those values from the right source.
+ * 
+ * @param playerStats 
+ * @param extendedStats 
+ * @returns 
+ */
 const consolidateStats = (
   playerStats: PlayerStatsResponse,
   extendedStats: PlayerExtendedStatsResponse
 ): StatConfig => {
+  // Comparison functions: not used for anything right now, but indicates what order (asc/desc) to use when comparing a specific stat.
   const cmpHigh = (a: number, b: number) => b - a;
   const cmpLow = (a: number, b: number) => a - b;
 
@@ -65,6 +74,13 @@ const consolidateStats = (
   return stats;
 };
 
+/**
+ * Writes and formats all the stats into the Discord embed object.
+ *  
+ * @param statsData 
+ * @param embed 
+ * @returns 
+ */
 const displaySingleUserStats = (statsData: StatConfig, embed: EmbedBuilder) => {
   const label = (stat: keyof StatConfig) => statsData[stat].label;
   const value = (stat: keyof StatConfig) =>
@@ -84,6 +100,14 @@ const displaySingleUserStats = (statsData: StatConfig, embed: EmbedBuilder) => {
   return embed;
 };
 
+/**
+ * Handler for the stats subcommand.
+ * 
+ * @param event 
+ * @param args 
+ * @param embed 
+ * @returns 
+ */
 export const statsHandler = async (
   event: Message<boolean>,
   args: string[],
@@ -99,7 +123,7 @@ export const statsHandler = async (
     } else if (args.length === 1) {
       let amaeId: string;
       // This clause checks if the nickname entered is in id format (all digits)
-      // If so, bypass the nickname lookup and use arg[0] as amae id.
+      // If so, bypass the nickname lookup and straight up use arg[0] as amae id.
       if (mjsNickname.match(/^\d+$/g)) {
         amaeId = args[0];
       } else {
@@ -117,10 +141,13 @@ export const statsHandler = async (
     if (!userData) {
       throw { mjsErrorType: MJS_ERROR_TYPE.NO_LINKED_USER };
     }
+    
+    // Maybe want to configure this to be a parameter in the future...
+    const GAME_LIMIT = 100;
 
     const majsoulUser = new MajsoulUser(userData.amaeId);
     const { playerStats, playerExtendedStats } =
-      await majsoulUser.fetchFullStats(100);
+      await majsoulUser.fetchFullStats(GAME_LIMIT);
     const stats = consolidateStats(playerStats, playerExtendedStats);
 
     if (
@@ -131,7 +158,9 @@ export const statsHandler = async (
       throw MJS_ERROR_TYPE.DATA_ERROR;
     }
 
-    if (majsoulUser.rank.majorRank === MAJOR_RANK.Cl) {
+    const { rank, rankLastWeek } = majsoulUser;
+
+    if (rank.majorRank === MAJOR_RANK.Cl) {
       embed.setDescription(
         "Note: Bot may may have bugs for Celestial players."
       );
@@ -140,8 +169,6 @@ export const statsHandler = async (
     embed
       .setTitle(`Stats for ${playerStats.nickname}: Last 100 Games`)
       .setURL(amaeUrl(playerStats.id.toString()));
-
-    const { rank, rankLastWeek } = majsoulUser;
 
     let rankString = rank.rankToShortString();
     let ptsString = rank.ptsToString();

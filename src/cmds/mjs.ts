@@ -59,6 +59,7 @@ export class MjsCommand implements CommandBuilder {
   async runCommand(event: Message<boolean>, args: string[]) {
     const eb = new EmbedManager(this.getCommandName(), event.client);
 
+    // All the handlers defined here are responsible for adding the embeds/formatting, etc.
     const subcommands: {
       [command: string]: {
         handler: (

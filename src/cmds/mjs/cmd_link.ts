@@ -27,6 +27,7 @@ const linkDiscordMjsAmae = async (
     await MjsDatabase.setUser(discordId, mjsNickname, amaeId);
     return amaeId;
   } catch (e: any) {
+    // We want to catch this error an continue since this error is actually the expected behaviour in this use case.
     if (e.mjsErrorType === MJS_ERROR_TYPE.MULTIPLE_MATCHING_USERS) {
       await MjsDatabase.setUser(discordId, mjsNickname, amaeId);
       return amaeId;
@@ -57,15 +58,19 @@ export const linkHandler = async (
 
   try {
     if (args.length === 0) {
+      // Get existing linked username
       content = savedMjsNickname
         ? `<@${discordAuthor.id}> is linked to ${inlineCode(savedMjsNickname)}`
         : "Majsoul username not set, use `ron mjs link <username>` to link username.";
     } else if (args.length === 1) {
+      // Set linked Majsoul account via nickname
       const nicknameToSet = args[0];
       amaeId = await getAmaeIdFromNickname(nicknameToSet);
       await MjsDatabase.setUser(discordAuthor.id, nicknameToSet, amaeId);
       content = `Successfully linked <@${discordAuthor.id}> to ${inlineCode(nicknameToSet)}, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
     } else if (args.length === 2) {
+      // Set linked Majsoul account via nickname and amaeId
+      // This should only be required in case the same username is used on multiple Majsoul servers
       const nicknameToSet = args[0];
       amaeId = args[1];
       await linkDiscordMjsAmae(discordAuthor.id, nicknameToSet, amaeId);
@@ -77,6 +82,7 @@ export const linkHandler = async (
     if (!e.hasOwnProperty("mjsErrorType")) {
       throw e;
     }
+    // Special error handlers
     switch (e.mjsErrorType) {
       case MJS_ERROR_TYPE.MULTIPLE_MATCHING_USERS:
         const ids = e.data.map((id: string) => `- id ${id}: ${amaeUrl(id)}`);

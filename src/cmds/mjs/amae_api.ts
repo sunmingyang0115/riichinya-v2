@@ -14,8 +14,6 @@ import TTLCache from "@isaacs/ttlcache";
 const API_ROOT = "https://5-data.amae-koromo.com/api/v2/pl4";
 
 // Cache with 5 minutes TTL
-// TODO: put this in amaeGet below
-// not implemented yet
 const cache = new TTLCache({ max: 1000, ttl: 1000 * 60 * 10 });
 
 /**
@@ -90,6 +88,17 @@ export const getAmaeIdFromNickname = async (
   return matchingIds[0];
 };
 
+/**
+ * Fetch most recent game results for a user.
+ * Can filter by startime/endtime/mode as well as limit.
+ *
+ * @param amaeId 
+ * @param startTimestamp 
+ * @param endTimestamp 
+ * @param modes 
+ * @param limit 
+ * @returns
+ */
 export const getPlayerRecords = async (
   amaeId: string,
   startTimestamp = dayjs(new Date(2015, 1, 1)),
@@ -110,6 +119,16 @@ export const getPlayerRecords = async (
   return response;
 };
 
+/**
+ * Fetch basic player statistics.
+ * Can filter by startime/endtime/mode.
+ * 
+ * @param amaeId 
+ * @param startTimestamp 
+ * @param endTimestamp 
+ * @param modes 
+ * @returns 
+ */
 export const getPlayerStats = async (
   amaeId: string,
   startTimestamp = dayjs(new Date(2015, 1, 1)),
@@ -128,6 +147,16 @@ export const getPlayerStats = async (
   return response;
 };
 
+/**
+ * Fetch extended player statistics - e.g. deal-in rate, call rate, etc.
+ * Can filter by startime/endtime/mode.
+ * 
+ * @param amaeId 
+ * @param startTimestamp 
+ * @param endTimestamp 
+ * @param modes 
+ * @returns 
+ */
 export const getExtendedPlayerStats = async (
   amaeId: string,
   startTimestamp = dayjs(new Date(2015, 1, 1)),

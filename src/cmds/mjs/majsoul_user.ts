@@ -27,6 +27,8 @@ export class MajsoulUser {
   }
 
   /*
+  Random notes:
+
   General procedure to fetch a player's stats:
   - if we want to use time/limit to filter, use /player_records/<player_id>/start/end?limit=&mode=&descending=true
     - this gets us all the games played by limit, and we can get their timestamps
@@ -37,25 +39,11 @@ export class MajsoulUser {
     - this should be the very last request made.
   */
 
-  async fetchLightStats() {
-    const playerStats = await getPlayerStats(
-      this.amaeId,
-      undefined,
-      undefined,
-      undefined
-    );
-    this.mjsNickname = playerStats.nickname;
-    this.rank = new Rank(
-      playerStats.level.id,
-      playerStats.level.score,
-      playerStats.level.delta
-    );
 
-    await this.getRankOneWeekAgo();
-    
-    return this;
-  }
-
+  /**
+   * Get the rank point 1 week ago to calculate delta
+   * @returns 
+   */
   async getRankOneWeekAgo() {
     const endDate = dayjs().subtract(1, "week");
     const startDate = endDate.subtract(4, "week");
@@ -75,6 +63,7 @@ export class MajsoulUser {
       return this;
     } catch (e) {
       // no games played between 1 week ago and 5 weeks ago.
+      // API will return an error if this is the case, so we should swallow the error here.
       console.error(e);
       return this;
     }
@@ -116,7 +105,12 @@ export class MajsoulUser {
     if (delta === 0) return "+0";
     return `${delta > 0 ? "+" : ""}${delta.toString()}`;
   }
-  /*
+
+  /**
+   * Get all the stats and save them (mostly) as class properties.
+   * @param limit 
+   * @param modes 
+   * @returns 
    */
   async fetchFullStats(
     limit = 0,
@@ -200,5 +194,30 @@ export class MajsoulUser {
       playerStats: playerStats,
       playerExtendedStats: playerExtendedStats,
     };
+  }
+
+  /**
+   * Fetch the light stats, only the ones required to generate a simple leaderboard.
+   * Regrettably, there is no deal-in rate or win rate found in the simple Player stats API.
+   * 
+   * @returns 
+   */
+  async fetchLightStats() {
+    const playerStats = await getPlayerStats(
+      this.amaeId,
+      undefined,
+      undefined,
+      undefined
+    );
+    this.mjsNickname = playerStats.nickname;
+    this.rank = new Rank(
+      playerStats.level.id,
+      playerStats.level.score,
+      playerStats.level.delta
+    );
+
+    await this.getRankOneWeekAgo();
+    
+    return this;
   }
 }

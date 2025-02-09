@@ -1,6 +1,8 @@
 /**
  * Everything related to MJS ranks go here in this file.
  */
+
+// Amae servers should only need support for Expert and above.
 export enum MAJOR_RANK {
   No = 1,
   Ad = 2,
@@ -90,7 +92,8 @@ export class Rank {
     this.minorRank = minorRank;
     this.points = points + delta;
 
-    // Amae servers doesnt actually store the latest points, need to calculate it using pts + delta then account for upgrade
+    // Amae servers doesnt actually store the latest rank points, need to calculate it using points + delta. 
+    // We need to handle overflow, e.g. points=1350/1400 + delta=100 => 1450/1400.
     if (this.points >= this.getUpgradePts()) {
       this.minorRank += 1;
       if (this.majorRank !== MAJOR_RANK.Cl && this.minorRank > 3) {
@@ -134,19 +137,22 @@ export class Rank {
     return Math.abs(cmp) !== 0 ? cmp * 10000 : this.points - other.points;
   }
 
-
+  // E.g. Expert 2
   rankToString(): string {
     return `${majorRankLongNames[this.majorRank]} ${this.minorRank}`;
   }
 
+  // E.g. 1350/1400
   ptsToString(): string {
     return `${this.points}/${this.getUpgradePts()}`;
   }
 
+  // E.g. Ex2
   rankToShortString(): string {
     return `${MAJOR_RANK[this.majorRank]}${this.minorRank}`;
   }
 
+  // TODO: Update this to be on the main repo, not a fork.
   getImage(): string {
     const ROOT_ASSETS_URL = `https://raw.githubusercontent.com/danielq987/riichinya-v2/refs/heads/main/assets`;
     return `${ROOT_ASSETS_URL}/${this.rankToShortString()}.png`;

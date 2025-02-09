@@ -6,7 +6,7 @@ import { MJS_ERROR_TYPE, MjsError } from "./common";
 /**
  *
  * @param event Discord bot message event
- * @param args Arguments passed to the link command
+ * @param args Arguments passed to the subcommand
  * @returns
  */
 export const unlinkHandler = async (

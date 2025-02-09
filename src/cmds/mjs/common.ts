@@ -36,6 +36,7 @@ export const ALL_MODES = [
   MJS_MODE.THRONE_HANCHAN,
 ];
 
+// Result of a match (0-index)
 export type Result = 0 | 1 | 2 | 3;
 
 export type SearchPlayerResponse = {
