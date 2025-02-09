@@ -14,7 +14,7 @@ export class MjsDatabase {
     Database<sqlite3.Database, sqlite3.Statement>
   > {
     return open({
-      filename: "usernames.sql",
+      filename: "usernames.sqlite",
       driver: sqlite3.Database,
     });
   }
