@@ -3,6 +3,7 @@
 .env
 .env.local
 *.sql
+*.sqlite
 package-lock.json
 yarn.lock
 bot_properties.json
@@ -10,3 +11,4 @@ bot_properties.json
 # folders
 build
 node_modules
+tmp
