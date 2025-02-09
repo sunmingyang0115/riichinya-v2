@@ -1,4 +1,4 @@
-import { unix } from "dayjs";
+import dayjs, { unix } from "dayjs";
 import {
   getExtendedPlayerStats,
   getPlayerRecords,
@@ -9,14 +9,17 @@ import {
   MJS_MODE,
   PlayerExtendedStatsResponse,
   PlayerStatsResponse,
-  Rank,
+  Result,
 } from "./common";
+import { Rank } from "./rank";
 
 export class MajsoulUser {
   amaeId: string;
   mjsNickname?: string;
   defaultMode?: MJS_MODE;
+  recentResults?: Result[];
   rank?: Rank;
+  rankLastWeek?: Rank;
   playerStats: { [modeStr: string]: PlayerStatsResponse } = {};
   extendedStats: { [modeStr: string]: PlayerExtendedStatsResponse } = {};
   constructor(amaeId: string) {
@@ -41,7 +44,77 @@ export class MajsoulUser {
       undefined,
       undefined
     );
-    this.rank = new Rank(playerStats.level.id, playerStats.level.score);
+    this.mjsNickname = playerStats.nickname;
+    this.rank = new Rank(
+      playerStats.level.id,
+      playerStats.level.score,
+      playerStats.level.delta
+    );
+
+    await this.getRankOneWeekAgo();
+    
+    return this;
+  }
+
+  async getRankOneWeekAgo() {
+    const endDate = dayjs().subtract(1, "week");
+    const startDate = endDate.subtract(4, "week");
+    try {
+      const playerStats = await getPlayerStats(
+        this.amaeId,
+        startDate,
+        endDate,
+        ALL_MODES
+      );
+      this.rankLastWeek = new Rank(
+        playerStats.level.id,
+        playerStats.level.score,
+        playerStats.level.delta
+      );
+
+      return this;
+    } catch (e) {
+      // no games played between 1 week ago and 5 weeks ago.
+      console.error(e);
+      return this;
+    }
+  }
+  
+  getRankChange() {
+    if (!this.rankLastWeek || !this.rank) return 0;
+    const cmp = this.rank.subtract(this.rankLastWeek);
+    if (Math.abs(cmp) >= 10000) {
+      return cmp > 0 ? 1 : -1;
+    } else {
+      return 0;
+    }
+  }
+  
+  getRankDeltaEmoji() {
+    const emojiLoookup = {
+      [1]: "↑",
+      [-1]: "↓",
+      [0]: ""
+    }
+    return emojiLoookup[this.getRankChange()];
+  }
+  
+  getPtDelta() {
+    if (!this.rankLastWeek || !this.rank) return 0;
+    const cmp = this.rank.subtract(this.rankLastWeek);
+    if (cmp === 0) {
+      return 0;
+    } else if (Math.abs(cmp) >= 10000) {
+      return this.rank.points - this.rank.getUpgradePts() / 2;
+    } else {
+      return this.rank.points - this.rankLastWeek.points;
+    }
+  }
+
+  getPtDeltaStr() {
+    const delta = this.getPtDelta();
+    if (delta === 0) return "+0";
+    return `${delta > 0 ? "+" : ""}${delta.toString()}`;
   }
   /*
    */
@@ -62,7 +135,7 @@ export class MajsoulUser {
         (limit = limit)
       );
       const oldestGame =
-        playerRecords[Math.max(limit, playerRecords.length) - 1];
+        playerRecords[Math.min(limit, playerRecords.length - 1)];
       oldestGameStart = unix(oldestGame.startTime);
     }
     const playerStats = await getPlayerStats(
@@ -78,9 +151,50 @@ export class MajsoulUser {
       undefined,
       playedModes
     );
-    const playedModesStr = playedModes.join(",");
 
-    this.rank = new Rank(playerStats.level.id, playerStats.level.score + playerStats.level.delta);
+    const last20Games = await getPlayerRecords(
+      this.amaeId,
+      undefined,
+      undefined,
+      (modes = modes),
+      (limit = 20)
+    );
+
+    this.recentResults = last20Games.map((game) => {
+      // sort scores in descending order
+      const scores = game.players
+        .map((player) => player.score)
+        .sort((a, b) => b - a);
+
+      const playerScore = game.players.find(
+        (player) => player.accountId.toString() === this.amaeId
+      )!.score;
+
+      let rank = 0;
+
+      // lmao
+      for (const score of scores) {
+        if (playerScore === score) {
+          break;
+        }
+        rank += 1;
+      }
+
+      if (rank < 0 || rank > 3) {
+        throw TypeError("Result must be between 0 and 3 inclusive.");
+      }
+
+      return rank as Result;
+    }).reverse();
+
+    this.rank = new Rank(
+      playerStats.level.id,
+      playerStats.level.score,
+      playerStats.level.delta
+    );
+
+    await this.getRankOneWeekAgo();
+
     this.defaultMode = Math.max(...playedModes);
     return {
       playerStats: playerStats,

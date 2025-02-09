@@ -73,7 +73,7 @@ export class EmbedManager extends EmbedBuilder {
                     break;
                 
                 case MJS_ERROR_TYPE.NICK_AMAE_MISMATCH:
-                    value = "The provided username and id do not match."
+                    value = "The provided username and amae ID do not match."
                     break;
             
                 default:

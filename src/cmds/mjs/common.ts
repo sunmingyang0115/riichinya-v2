@@ -1,4 +1,7 @@
-import { Dayjs } from "dayjs";
+/**
+ * Random shared code for the mjs discord command.
+ */
+
 import * as data from "./translate.json";
 
 export enum MJS_ERROR_TYPE {
@@ -7,6 +10,7 @@ export enum MJS_ERROR_TYPE {
   NICK_AMAE_MISMATCH,
   NO_LINKED_USER,
   ARGUMENT_ERROR,
+  DATA_ERROR
 }
 
 export type MjsError = {
@@ -32,117 +36,7 @@ export const ALL_MODES = [
   MJS_MODE.THRONE_HANCHAN,
 ];
 
-export enum MAJOR_RANK {
-  No = 1,
-  Ad = 2,
-  Ex = 3,
-  Ms = 4,
-  St = 5,
-  Cl = 7,
-}
-
-const majorRankLongNames = {
-  [MAJOR_RANK.No]: "Novice",
-  [MAJOR_RANK.Ad]: "Adept",
-  [MAJOR_RANK.Ex]: "Expert",
-  [MAJOR_RANK.Ms]: "Master",
-  [MAJOR_RANK.St]: "Saint",
-  [MAJOR_RANK.Cl]: "Celestial",
-};
-
-const rankData = {
-  [MAJOR_RANK.Ex]: {
-    1: {
-      upgradePts: 1200,
-    },
-    2: {
-      upgradePts: 1400,
-    },
-    3: {
-      upgradePts: 2000,
-    },
-  },
-  [MAJOR_RANK.Ms]: {
-    1: {
-      upgradePts: 2800,
-    },
-    2: {
-      upgradePts: 3200,
-    },
-    3: {
-      upgradePts: 3600,
-    },
-  },
-  [MAJOR_RANK.St]: {
-    1: {
-      upgradePts: 4000,
-    },
-    2: {
-      upgradePts: 6000,
-    },
-    3: {
-      upgradePts: 9000,
-    },
-  },
-};
-
-export class Rank {
-  majorRank: MAJOR_RANK;
-  minorRank: number;
-  points: number;
-
-  constructor(amaeRank: number, points: number) {
-    const majorRank = Math.floor(amaeRank / 100) % 10;
-    const minorRank = amaeRank % 100;
-
-    if (!Object.values(MAJOR_RANK).includes(majorRank)) {
-      console.error(`Unknown rank: ${amaeRank}`);
-      throw TypeError(`Unknown rank: ${amaeRank}`);
-    }
-    if (
-      (majorRank as MAJOR_RANK) !== MAJOR_RANK.Cl &&
-      !(minorRank <= 3 && minorRank >= 1)
-    ) {
-      console.error(`Unknown rank: ${amaeRank}`);
-      throw TypeError(`Unknown rank: ${amaeRank}`);
-    }
-    this.majorRank = majorRank as MAJOR_RANK;
-    this.minorRank = minorRank;
-    this.points = points;
-  }
-  getUpgradePts(): number {
-    switch (this.majorRank) {
-      case MAJOR_RANK.Ex:
-      case MAJOR_RANK.Ms:
-      case MAJOR_RANK.St:
-        return rankData[this.majorRank][
-          this.minorRank as keyof (typeof rankData)[MAJOR_RANK.Ex]
-        ].upgradePts;
-
-      case MAJOR_RANK.Cl:
-        return 20;
-
-      default:
-        return 0;
-    }
-  }
-
-  static compare(a: Rank, b: Rank) {
-    return a.majorRank * 100 + a.minorRank - (b.majorRank * 100 + b.minorRank);
-  }
-
-  rankToString(): string {
-    return `${majorRankLongNames[this.majorRank]} ${this.minorRank}`;
-  }
-
-  ptsToString(): string {
-    return `${this.points}/${this.getUpgradePts()}`;
-  }
-
-  rankToShortString(): string {
-    return `${MAJOR_RANK[this.majorRank]}${this.minorRank}`;
-  }
-}
+export type Result = 0 | 1 | 2 | 3;
 
 export type SearchPlayerResponse = {
   id: number;

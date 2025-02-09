@@ -2,7 +2,6 @@ import axios, { AxiosError } from "axios";
 import {
   ALL_MODES,
   MJS_ERROR_TYPE,
-  MJS_MODE,
   MjsError,
   PlayerExtendedStatsResponse,
   PlayerRecordResponse,

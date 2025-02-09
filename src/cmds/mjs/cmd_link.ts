@@ -1,7 +1,7 @@
-import { EmbedBuilder, Message } from "discord.js";
-import { UsersDatabase } from "./sql_db";
+import { EmbedBuilder, inlineCode, Message } from "discord.js";
+import { MjsDatabase } from "./sql_db";
 import { getAmaeIdFromNickname } from "./amae_api";
-import { amaeUrl, MJS_ERROR_TYPE, MjsError } from "./common";
+import { amaeUrl, MJS_ERROR_TYPE } from "./common";
 
 /**
  * Associates Majsoul Nickname and Amae id with Discord User.
@@ -17,27 +17,23 @@ const linkDiscordMjsAmae = async (
   mjsNickname: string,
   amaeId: string
 ): Promise<string> => {
-  const amaeIds = await getAmaeIdFromNickname(mjsNickname);
-  if (!amaeIds.includes(amaeId)) {
-    throw {
-      mjsErrorType: MJS_ERROR_TYPE.NICK_AMAE_MISMATCH,
-    };
+  try {
+    const searchId = await getAmaeIdFromNickname(mjsNickname);
+    if (amaeId !== searchId) {
+      throw {
+        mjsErrorType: MJS_ERROR_TYPE.NICK_AMAE_MISMATCH,
+      };
+    }
+    await MjsDatabase.setUser(discordId, mjsNickname, amaeId);
+    return amaeId;
+  } catch (e: any) {
+    if (e.mjsErrorType === MJS_ERROR_TYPE.MULTIPLE_MATCHING_USERS) {
+      await MjsDatabase.setUser(discordId, mjsNickname, amaeId);
+      return amaeId;
+    } else {
+      throw(e)
+    }
   }
-  await UsersDatabase.setUser(discordId, mjsNickname, amaeId);
-  return amaeId;
-};
-
-/**
- * Gets Majsoul Nickname associated with discordId.
- *
- * If none, return empty string.
- *
- * @param discordId
- * @returns associated username or empty string
- */
-const getMjsNickname = async (discordId: string): Promise<string> => {
-  const response = await UsersDatabase.getUser(discordId);
-  return response?.mjsNickname ?? "";
 };
 
 /**
@@ -53,25 +49,27 @@ export const linkHandler = async (
   embed: EmbedBuilder
 ): Promise<string | undefined> => {
   const { author: discordAuthor } = event;
-  const savedMjsNickname = await getMjsNickname(discordAuthor.id);
+  const savedMjsNickname = (await MjsDatabase.getUser(discordAuthor.id))
+    ?.mjsNickname;
   const nicknameToSet = args?.[0] ?? "";
   let amaeId: string;
   let content;
+
   try {
     if (args.length === 0) {
       content = savedMjsNickname
-        ? `<@${discordAuthor.id}> is linked to \`${savedMjsNickname}\``
+        ? `<@${discordAuthor.id}> is linked to ${inlineCode(savedMjsNickname)}`
         : "Majsoul username not set, use `ron mjs link <username>` to link username.";
     } else if (args.length === 1) {
       const nicknameToSet = args[0];
       amaeId = await getAmaeIdFromNickname(nicknameToSet);
-      await UsersDatabase.setUser(discordAuthor.id, nicknameToSet, amaeId);
-      content = `Successfully linked <@${discordAuthor.id}> to \`${nicknameToSet}\`, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
+      await MjsDatabase.setUser(discordAuthor.id, nicknameToSet, amaeId);
+      content = `Successfully linked <@${discordAuthor.id}> to ${inlineCode(nicknameToSet)}, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
     } else if (args.length === 2) {
       const nicknameToSet = args[0];
       amaeId = args[1];
       await linkDiscordMjsAmae(discordAuthor.id, nicknameToSet, amaeId);
-      content = `Successfully linked <@${discordAuthor.id}> to \`${nicknameToSet}\`, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
+      content = `Successfully linked <@${discordAuthor.id}> to ${inlineCode(nicknameToSet)}, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
     } else {
       throw MJS_ERROR_TYPE.ARGUMENT_ERROR;
     }
@@ -81,15 +79,13 @@ export const linkHandler = async (
     }
     switch (e.mjsErrorType) {
       case MJS_ERROR_TYPE.MULTIPLE_MATCHING_USERS:
-        const ids = e.data.map(
-          (id: string) => `- id ${id}: ${amaeUrl(id)}`
-        );
-        return `Multiple players found with username \`${nicknameToSet}\`. Which one are you?\n${ids.join(
+        const ids = e.data.map((id: string) => `- id ${id}: ${amaeUrl(id)}`);
+        return `Multiple players found with username ${inlineCode(nicknameToSet)}. Which one are you?\n${ids.join(
           "\n"
         )}\nPlease retry with \`ron mjs link ${nicknameToSet} <id>\``;
 
       case MJS_ERROR_TYPE.NO_MATCHING_USERS:
-        return `No players found with username ${nicknameToSet}`;
+        return `No players found with username ${inlineCode(nicknameToSet)}`;
 
       case MJS_ERROR_TYPE.ARGUMENT_ERROR:
         return `Too many arguments, expected 0-2 arguments.`;
@@ -98,12 +94,12 @@ export const linkHandler = async (
         throw e;
     }
   }
-  
+
   embed.setDescription(content);
-  
+
   event.reply({
-    embeds: [embed]
-  })
-  
+    embeds: [embed],
+  });
+
   return "";
 };
