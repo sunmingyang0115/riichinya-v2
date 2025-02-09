@@ -43,8 +43,6 @@ const getMjsNickname = async (discordId: string): Promise<string> => {
 /**
  * Handles all functionality related to linking a discord user with a majsoul account.
  *
- * Returns string to place inside embed.
- *
  * @param event Discord bot message event
  * @param args Arguments passed to the link command
  * @returns
@@ -53,28 +51,30 @@ export const linkHandler = async (
   event: Message<boolean>,
   args: string[],
   embed: EmbedBuilder
-): Promise<string> => {
+): Promise<string | undefined> => {
   const { author: discordAuthor } = event;
   const savedMjsNickname = await getMjsNickname(discordAuthor.id);
   const nicknameToSet = args?.[0] ?? "";
   let amaeId: string;
+  let content;
   try {
     if (args.length === 0) {
-      return savedMjsNickname
+      content = savedMjsNickname
         ? `<@${discordAuthor.id}> is linked to \`${savedMjsNickname}\``
         : "Majsoul username not set, use `ron mjs link <username>` to link username.";
     } else if (args.length === 1) {
       const nicknameToSet = args[0];
       amaeId = await getAmaeIdFromNickname(nicknameToSet);
       await UsersDatabase.setUser(discordAuthor.id, nicknameToSet, amaeId);
+      content = `Successfully linked <@${discordAuthor.id}> to \`${nicknameToSet}\`, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
     } else if (args.length === 2) {
       const nicknameToSet = args[0];
       amaeId = args[1];
       await linkDiscordMjsAmae(discordAuthor.id, nicknameToSet, amaeId);
+      content = `Successfully linked <@${discordAuthor.id}> to \`${nicknameToSet}\`, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
     } else {
-      return "Too many arguments: expected 0 or 1 arguments.";
+      throw MJS_ERROR_TYPE.ARGUMENT_ERROR;
     }
-    return `Successfully linked <@${discordAuthor.id}> to \`${nicknameToSet}\`, with amae-koromo id https://amae-koromo.sapk.ch/player/${amaeId}`;
   } catch (e: any) {
     if (!e.hasOwnProperty("mjsErrorType")) {
       throw e;
@@ -91,8 +91,19 @@ export const linkHandler = async (
       case MJS_ERROR_TYPE.NO_MATCHING_USERS:
         return `No players found with username ${nicknameToSet}`;
 
+      case MJS_ERROR_TYPE.ARGUMENT_ERROR:
+        return `Too many arguments, expected 0-2 arguments.`;
+
       default:
         throw e;
     }
   }
+  
+  embed.setDescription(content);
+  
+  event.reply({
+    embeds: [embed]
+  })
+  
+  return "";
 };

@@ -80,7 +80,7 @@ export class MajsoulUser {
     );
     const playedModesStr = playedModes.join(",");
 
-    this.rank = new Rank(playerStats.level.id, playerStats.level.score);
+    this.rank = new Rank(playerStats.level.id, playerStats.level.score + playerStats.level.delta);
     this.defaultMode = Math.max(...playedModes);
     return {
       playerStats: playerStats,

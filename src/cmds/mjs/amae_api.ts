@@ -30,7 +30,7 @@ const cache = new TTLCache({ max: 1000, ttl: 1000 * 60 * 10 });
 const ceilNearest10Minutes = (date: Dayjs) => {
   const amount = 10;
   const unit = "minutes";
-  return date.add(amount - (date.get("minutes") % amount), unit).startOf(unit);
+  return date.add(amount - (date.get("minutes") % amount), unit).startOf(unit).unix();
 };
 
 /**
@@ -106,7 +106,7 @@ export const getPlayerRecords = async (
     }/?mode=${modeStr}${limitStr}&descending=true`,
     `player_records/${amaeId}/${ceilNearest10Minutes(
       startTimestamp
-    ).unix()}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}/${limitStr}`
+    )}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}/${limitStr}`
   );
   return response;
 };
@@ -124,7 +124,7 @@ export const getPlayerStats = async (
     }/?mode=${modeStr}`,
     `player_stats/${amaeId}/${ceilNearest10Minutes(
       startTimestamp
-    ).unix()}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}`
+    )}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}`
   );
   return response;
 };
@@ -142,7 +142,7 @@ export const getExtendedPlayerStats = async (
     }/?mode=${modeStr}`,
     `player_extended_stats/${amaeId}/${ceilNearest10Minutes(
       startTimestamp
-    ).unix()}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}`
+    )}/${ceilNearest10Minutes(endTimestamp)}/${modeStr}`
   );
   return response;
 };

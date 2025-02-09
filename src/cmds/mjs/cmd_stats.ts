@@ -12,6 +12,8 @@ import {
 } from "./common";
 import { MajsoulUser } from "./majsoul_user";
 import { getAmaeIdFromNickname } from "./amae_api";
+import { generatePieChartSvg } from "./charts";
+import sharp from "sharp";
 
 type StatConfig = {
   [key: string]: {
@@ -64,15 +66,16 @@ const displaySingleUserStats = (statsData: StatConfig, embed: EmbedBuilder) => {
       return `**${stat.label}**: ${stat.formatter(stat.value)}`;
     })
     .join("\n");
-    
+
   const label = (stat: keyof StatConfig) => statsData[stat].label;
-  const value = (stat: keyof StatConfig) => statsData[stat].formatter(statsData[stat].value);
+  const value = (stat: keyof StatConfig) =>
+    statsData[stat].formatter(statsData[stat].value);
   embed.addFields(
-    {name: label("recordedMatches"), value: value("recordedMatches")},
-    {name: label("dealInRate"), value: value("dealInRate"), inline: true},
-    {name: label("winRate"), value: value("winRate"), inline: true},
-    {name: label("callRate"), value: value("callRate"), inline: true},
-  )
+    { name: label("recordedMatches"), value: value("recordedMatches") },
+    { name: label("dealInRate"), value: value("dealInRate"), inline: true },
+    { name: label("winRate"), value: value("winRate"), inline: true },
+    { name: label("callRate"), value: value("callRate"), inline: true }
+  );
 
   return embed;
 };
@@ -84,6 +87,7 @@ export const statsHandler = async (
 ): Promise<string | undefined> => {
   const { author: discordAuthor } = event;
   const mjsNickname = args?.[0] ?? "";
+  const files = [];
   try {
     let userData: UserIdData | null;
     if (args.length === 0) {
@@ -114,11 +118,24 @@ export const statsHandler = async (
     const { playerStats, playerExtendedStats } =
       await majsoulUser.fetchFullStats(100);
     const stats = consolidateStats(playerStats, playerExtendedStats);
+    console.log(playerStats);
 
-    embed.setTitle(playerStats.nickname).setURL(amaeUrl(playerStats.id.toString()));
-    const rankString = `${majsoulUser.rank?.rankToShortString()} ${majsoulUser.rank?.ptsToString()}`
-    embed.addFields({name: "Rank", value: rankString});
+    embed
+      .setTitle(playerStats.nickname)
+      .setURL(amaeUrl(playerStats.id.toString()));
+    const rankString = `${majsoulUser.rank?.rankToShortString()} ${majsoulUser.rank?.ptsToString()}`;
+    embed.addFields({ name: "Rank", value: rankString });
     displaySingleUserStats(stats, embed);
+
+    const piePath = `${userData.amaeId}.png`
+    sharp(Buffer.from(generatePieChartSvg(playerStats.rank_rates))).toFile(
+      `${userData.amaeId}.png`
+    );
+    embed.setImage(`attachment://${piePath}`)
+    files.push({
+      attachment: piePath,
+      name: piePath,
+    })
   } catch (e: any) {
     console.log(e);
     if (!e.hasOwnProperty("mjsErrorType")) {
@@ -143,4 +160,11 @@ export const statsHandler = async (
         throw e;
     }
   }
+  
+  event.reply({
+    embeds: [embed],
+    files: files
+  })
+  
+  return "";
 };

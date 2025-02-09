@@ -6,6 +6,7 @@ export enum MJS_ERROR_TYPE {
   NO_MATCHING_USERS,
   NICK_AMAE_MISMATCH,
   NO_LINKED_USER,
+  ARGUMENT_ERROR,
 }
 
 export type MjsError = {

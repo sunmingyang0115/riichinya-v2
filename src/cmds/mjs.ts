@@ -63,15 +63,21 @@ export class MjsCommand implements CommandBuilder {
         handler: statsHandler,
       },
     };
+
     const isValidSubcommand = Object.keys(subcommands).includes(args[0]);
-
-    const content = isValidSubcommand
-      ? await subcommands[args[0]].handler(event, args.slice(1), eb)
-      : `Command not found. Available commands are ${Object.keys(subcommands)
+    
+    if (isValidSubcommand) {
+      // These handlers should return empty string if no error. Otherwise, return an error message.
+      const errorString = await subcommands[args[0]].handler(event, args.slice(1), eb);
+      if (errorString) {
+        eb.addContent(errorString);
+        event.reply({ embeds: [eb] })
+      }
+    } else {
+      eb.addContent(`Command not found. Available commands are ${Object.keys(subcommands)
           .map((command) => `\`${command}\``)
-          .join(", ")}.`;
-
-    content && eb.addContent(content);
-    event.reply({ embeds: [eb] });
+          .join(", ")}.`)
+      event.reply({ embeds: [eb] })
+    }
   }
 }
