@@ -1,10 +1,10 @@
-import { codeBlock, EmbedBuilder, Message } from "discord.js";
+import { codeBlock, EmbedBuilder, inlineCode, Message } from "discord.js";
 import { MjsDatabase } from "./sql_db";
 import { getAmaeIdFromNickname } from "./amae_api";
-import { MJS_ERROR_TYPE, MjsError } from "./common";
-import { AsciiTable3 } from "ascii-table3";
+import { ANSI_COLOR, ansiFormat, MJS_ERROR_TYPE, MjsError } from "./common";
 import { MajsoulUser } from "./majsoul_user";
 import { Rank } from "./rank";
+import { table } from "table";
 
 /**
  *
@@ -36,11 +36,7 @@ export const leaderboardHandler = async (
       delta: {
         name: "Rank/Point Change (1-week)",
         cmp: (a: MajsoulUser, b: MajsoulUser) => {
-          return (
-            b.getRankChange() * 10000 +
-            b.getPtDelta() -
-            (a.getRankChange() * 10000 + a.getPtDelta())
-          );
+          return b.getPtDelta() - a.getPtDelta();
         },
       },
     };
@@ -54,7 +50,7 @@ export const leaderboardHandler = async (
       }
       sortKey = key as keyof typeof sortOptions;
     }
-    
+
     const promises = linkedAccounts.map((user) => {
       const majsoulUser = new MajsoulUser(user.amaeId);
       return majsoulUser.fetchLightStats();
@@ -63,30 +59,110 @@ export const leaderboardHandler = async (
     // Fetch user data in parallel to save time
     const majsoulUsers = await Promise.all(promises);
 
-    const table = new AsciiTable3()
-      .setHeading("", "Name", "Points", "Delta (1wk)")
-      .addRowMatrix(
-        majsoulUsers
-          .sort(sortOptions[sortKey].cmp)
-          .map((user, index) => {
-            if (!user.rank) {
-              throw MJS_ERROR_TYPE.DATA_ERROR;
-            }
-            const rankUpgradeStr = user.getRankDeltaEmoji();
-            return [
-              index + 1,
-              `[${rankUpgradeStr}${user.rank.rankToShortString()}] ${
-                user.mjsNickname
-              }`,
-              user.rank.ptsToString(),
-              user.getPtDeltaStr(),
-            ];
-          })
-      )
-      .setStyle("unicode-round");
+    const headers = ["", "Rank", "Name", "Points", "+/-"];
+
+    // If username is longer than this, insert newline in table.
+    const USERNAME_WRAP_LEN = 13;
+    // Points required to colour the delta red/green.
+    const PT_DELTA_THRESHOLD = 50;
+
+    const rows = majsoulUsers
+      .sort(sortOptions[sortKey].cmp)
+      .map((user, index) => {
+        if (!user.rank) {
+          throw MJS_ERROR_TYPE.DATA_ERROR;
+        }
+        const rankUpgradeEmoji = user.getRankDeltaEmoji();
+        let ptsString = user.rank.ptsToString();
+
+        let rankStr = ansiFormat(
+          user.rank.rankToShortString(),
+          user.rank.getAnsiColor()
+        );
+
+        const deltaFontColor =
+          user.getPtDelta() > PT_DELTA_THRESHOLD
+            ? ANSI_COLOR.GREEN
+            : user.getPtDelta() < -PT_DELTA_THRESHOLD
+            ? ANSI_COLOR.RED
+            : ANSI_COLOR.DEFAULT;
+
+        const deltaStr = ansiFormat(user.getPtDeltaStr(), deltaFontColor);
+
+        let nicknameDisplay = user.mjsNickname;
+        if (nicknameDisplay.length > USERNAME_WRAP_LEN) {
+          nicknameDisplay =
+            nicknameDisplay.slice(0, USERNAME_WRAP_LEN - 3) +
+            "\n" +
+            nicknameDisplay.slice(USERNAME_WRAP_LEN - 3);
+          ptsString += "\n";
+        }
+
+        return [
+          index + 1,
+          `${rankStr}${rankUpgradeEmoji}`,
+          `${nicknameDisplay}`,
+          ptsString,
+          deltaStr,
+        ];
+      });
+
+    // Split table into left and right half because DISCORD'S MONOSPACE FONT
+    // ISNT MONOSPACE FOR NON-LATIN CHARACTERS
+    // Have username on the very right side of the left table as to not cause problems
+    // for the rest of the table.
+    // Use custom borders to make the illusion of one contiguous table.
+
+    const COL_TO_SPLIT = 3;
+    
+    const drawHorizontalLine = (lineIndex: number, rowCount: number) => {
+          return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount || lineIndex % 5 === 1;
+        };
+
+    // Ranking and username
+    const leftSide = table(
+      [
+        headers.slice(0, COL_TO_SPLIT),
+        ...rows.map((row) => row.slice(0, COL_TO_SPLIT)),
+      ],
+      {
+        border: {
+          bodyRight: " ",
+          joinRight: "─",
+          topRight: "═",
+          bottomRight: "═",
+        },
+        drawHorizontalLine
+      },
+    );
+
+    // Points and delta
+    const rightSide = table(
+      [
+        headers.slice(COL_TO_SPLIT),
+        ...rows.map((row) => row.slice(COL_TO_SPLIT)),
+      ],
+      {
+        border: { bodyLeft: "│", joinLeft: "┼", topLeft: "╤", bottomLeft: "╧" },
+        drawHorizontalLine,
+        columns: [{ alignment: "justify" }, { alignment: "right" }],
+      }
+    );
 
     embed.setTitle(`Server Leaderboard Sorted by ${sortOptions[sortKey].name}`);
-    embed.setDescription(codeBlock(table.toString()));
+    embed.addFields(
+      {
+        name: "\u200b",
+        value: codeBlock("ansi", leftSide),
+        inline: true,
+      },
+      {
+        name: "\u200b",
+        value: codeBlock("ansi", rightSide),
+        inline: true,
+      }
+    );
+    // embed.setDescription(codeBlock(leftSide));
   } catch (e: any) {
     console.error(e);
     throw e;

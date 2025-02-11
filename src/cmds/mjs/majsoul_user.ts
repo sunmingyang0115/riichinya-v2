@@ -6,16 +6,17 @@ import {
 } from "./amae_api";
 import {
   ALL_MODES,
+  formatFixed1,
   MJS_MODE,
   PlayerExtendedStatsResponse,
   PlayerStatsResponse,
   Result,
 } from "./common";
-import { Rank } from "./rank";
+import { MAJOR_RANK, Rank } from "./rank";
 
 export class MajsoulUser {
   amaeId: string;
-  mjsNickname?: string;
+  mjsNickname = "";
   defaultMode?: MJS_MODE;
   recentResults?: Result[];
   rank?: Rank;
@@ -39,10 +40,9 @@ export class MajsoulUser {
     - this should be the very last request made.
   */
 
-
   /**
    * Get the rank point 1 week ago to calculate delta
-   * @returns 
+   * @returns
    */
   async getRankOneWeekAgo() {
     const endDate = dayjs().subtract(1, "week");
@@ -64,11 +64,13 @@ export class MajsoulUser {
     } catch (e) {
       // no games played between 1 week ago and 5 weeks ago.
       // API will return an error if this is the case, so we should swallow the error here.
-      console.error(e);
+      console.error(
+        `No games played recently for user ${this.amaeId}- no delta.`
+      );
       return this;
     }
   }
-  
+
   getRankChange() {
     if (!this.rankLastWeek || !this.rank) return 0;
     const cmp = this.rank.subtract(this.rankLastWeek);
@@ -78,23 +80,35 @@ export class MajsoulUser {
       return 0;
     }
   }
-  
+
   getRankDeltaEmoji() {
     const emojiLoookup = {
       [1]: "↑",
       [-1]: "↓",
-      [0]: ""
-    }
+      [0]: "",
+    };
     return emojiLoookup[this.getRankChange()];
   }
-  
+
   getPtDelta() {
     if (!this.rankLastWeek || !this.rank) return 0;
     const cmp = this.rank.subtract(this.rankLastWeek);
     if (cmp === 0) {
       return 0;
-    } else if (Math.abs(cmp) >= 10000) {
-      return this.rank.points - this.rank.getUpgradePts() / 2;
+    } else if (cmp >= 10000) {
+      // THIS CODE IS WRONG IF USER UPGRADES MORE THAN ONE RANK LOL
+      return (
+        this.rank.points -
+        this.rank.getUpgradePts() / 2 +
+        this.rankLastWeek.getUpgradePts() -
+        this.rankLastWeek.points
+      );
+    } else if (cmp <= -10000) {
+      return (
+        this.rank.points -
+        this.rank.getUpgradePts() / 2 -
+        this.rankLastWeek.points
+      );
     } else {
       return this.rank.points - this.rankLastWeek.points;
     }
@@ -103,14 +117,14 @@ export class MajsoulUser {
   getPtDeltaStr() {
     const delta = this.getPtDelta();
     if (delta === 0) return "+0";
-    return `${delta > 0 ? "+" : ""}${delta.toString()}`;
+    return `${delta > 0 ? "+" : ""}${this.rank?.majorRank === MAJOR_RANK.Cl ? formatFixed1(delta / 100) : delta.toString()}`;A
   }
 
   /**
    * Get all the stats and save them (mostly) as class properties.
-   * @param limit 
-   * @param modes 
-   * @returns 
+   * @param limit
+   * @param modes
+   * @returns
    */
   async fetchFullStats(
     limit = 0,
@@ -154,32 +168,34 @@ export class MajsoulUser {
       (limit = 20)
     );
 
-    this.recentResults = last20Games.map((game) => {
-      // sort scores in descending order
-      const scores = game.players
-        .map((player) => player.score)
-        .sort((a, b) => b - a);
+    this.recentResults = last20Games
+      .map((game) => {
+        // sort scores in descending order
+        const scores = game.players
+          .map((player) => player.score)
+          .sort((a, b) => b - a);
 
-      const playerScore = game.players.find(
-        (player) => player.accountId.toString() === this.amaeId
-      )!.score;
+        const playerScore = game.players.find(
+          (player) => player.accountId.toString() === this.amaeId
+        )!.score;
 
-      let rank = 0;
+        let rank = 0;
 
-      // lmao
-      for (const score of scores) {
-        if (playerScore === score) {
-          break;
+        // lmao
+        for (const score of scores) {
+          if (playerScore === score) {
+            break;
+          }
+          rank += 1;
         }
-        rank += 1;
-      }
 
-      if (rank < 0 || rank > 3) {
-        throw TypeError("Result must be between 0 and 3 inclusive.");
-      }
+        if (rank < 0 || rank > 3) {
+          throw TypeError("Result must be between 0 and 3 inclusive.");
+        }
 
-      return rank as Result;
-    }).reverse();
+        return rank as Result;
+      })
+      .reverse();
 
     this.rank = new Rank(
       playerStats.level.id,
@@ -199,8 +215,8 @@ export class MajsoulUser {
   /**
    * Fetch the light stats, only the ones required to generate a simple leaderboard.
    * Regrettably, there is no deal-in rate or win rate found in the simple Player stats API.
-   * 
-   * @returns 
+   *
+   * @returns
    */
   async fetchLightStats() {
     const playerStats = await getPlayerStats(
@@ -217,7 +233,7 @@ export class MajsoulUser {
     );
 
     await this.getRankOneWeekAgo();
-    
+
     return this;
   }
 }
