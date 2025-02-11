@@ -1,5 +1,6 @@
 import { EmbedBuilder, Client } from "discord.js";
 import { CommandBuilder } from "./cmd_manager";
+import { MJS_ERROR_TYPE } from "../cmds/mjs/common";
 
 export class EmbedManager extends EmbedBuilder {
     constructor (commandname : string, profile : Client) {
@@ -57,8 +58,28 @@ export class EmbedManager extends EmbedBuilder {
     
     static createErrorEmbed(error : any, profile : Client) : EmbedBuilder {
         let eb = new EmbedManager(":(", profile);
+        console.error(error);
         if (error instanceof Error) {
             eb.addFields({name : error.name, value : error.message});
+        } else if (error.hasOwnProperty("mjsErrorType")) {
+            let value;
+            switch (error.mjsErrorType) {
+                case MJS_ERROR_TYPE.MULTIPLE_MATCHING_USERS:
+                    value = "Multiple users match the provided username." 
+                    break;
+                
+                case MJS_ERROR_TYPE.NO_MATCHING_USERS:
+                    value = "No users match the provided username."
+                    break;
+                
+                case MJS_ERROR_TYPE.NICK_AMAE_MISMATCH:
+                    value = "The provided username and amae ID do not match."
+                    break;
+            
+                default:
+                    break;
+            }
+            eb.addFields({name: MJS_ERROR_TYPE[error.mjsErrorType], value: value});
         } else {
             eb.setDescription("Cannot generate error message");
         }

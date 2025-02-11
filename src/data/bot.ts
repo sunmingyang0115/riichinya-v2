@@ -8,6 +8,7 @@ import { EvalCommand } from "../cmds/eval.js";
 import { TestCommand } from "../cmds/test.js";
 import { RiichiDbCommand } from "../cmds/riichidb.js";
 import { InteractionHandler } from "../events/interaction_handler.js";
+import { MjsCommand } from "../cmds/mjs.js";
 
 export class Bot {
     private token: string | undefined;
@@ -18,6 +19,7 @@ export class Bot {
             new PingCommand(),
             new EvalCommand(),
             new TestCommand(),
+            new MjsCommand(),
             new RiichiDbCommand()
         ];
         let events : EventBuilder[] = [

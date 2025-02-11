@@ -10,15 +10,21 @@
     "start": "node ."
   },
   "dependencies": {
+    "@isaacs/ttlcache": "^1.4.1",
+    "ascii-table3": "^0.9.0",
+    "axios": "^1.7.9",
+    "dayjs": "^1.11.13",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "json2csv": "^6.0.0-alpha.2",
+    "sharp": "^0.33.5",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@types/json2csv": "^5.0.7",
     "@types/node": "^20.13.0",
-    "tsx": "^4.11.0"
+    "tsx": "^4.11.0",
+    "typescript": "^5.7.3"
   }
 }
