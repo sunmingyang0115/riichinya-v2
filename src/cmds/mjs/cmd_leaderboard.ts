@@ -114,6 +114,10 @@ export const leaderboardHandler = async (
     // Use custom borders to make the illusion of one contiguous table.
 
     const COL_TO_SPLIT = 3;
+    
+    const drawHorizontalLine = (lineIndex: number, rowCount: number) => {
+          return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount || lineIndex % 5 === 1;
+        };
 
     // Ranking and username
     const leftSide = table(
@@ -128,10 +132,8 @@ export const leaderboardHandler = async (
           topRight: "═",
           bottomRight: "═",
         },
-        drawHorizontalLine: (lineIndex, rowCount) => {
-          return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
-        },
-      }
+        drawHorizontalLine
+      },
     );
 
     // Points and delta
@@ -142,9 +144,7 @@ export const leaderboardHandler = async (
       ],
       {
         border: { bodyLeft: "│", joinLeft: "┼", topLeft: "╤", bottomLeft: "╧" },
-        drawHorizontalLine: (lineIndex, rowCount) => {
-          return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
-        },
+        drawHorizontalLine,
         columns: [{ alignment: "justify" }, { alignment: "right" }],
       }
     );
