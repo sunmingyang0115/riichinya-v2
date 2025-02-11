@@ -79,7 +79,7 @@ export class EmbedManager extends EmbedBuilder {
                 default:
                     break;
             }
-            eb.addFields({name: MJS_ERROR_TYPE[error.mjsErrorType], value: value});
+            eb.addFields({name: MJS_ERROR_TYPE[error.mjsErrorType], value: value!});
         } else {
             eb.setDescription("Cannot generate error message");
         }

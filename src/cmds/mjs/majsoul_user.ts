@@ -117,7 +117,7 @@ export class MajsoulUser {
   getPtDeltaStr() {
     const delta = this.getPtDelta();
     if (delta === 0) return "+0";
-    return `${delta > 0 ? "+" : ""}${this.rank?.majorRank === MAJOR_RANK.Cl ? formatFixed1(delta / 100) : delta.toString()}`;A
+    return `${delta > 0 ? "+" : ""}${this.rank?.majorRank === MAJOR_RANK.Cl ? formatFixed1(delta / 100) : delta.toString()}`;
   }
 
   /**
