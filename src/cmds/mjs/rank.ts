@@ -2,6 +2,8 @@
  * Everything related to MJS ranks go here in this file.
  */
 
+import { ANSI_COLOR } from "./common";
+
 // Amae servers should only need support for Expert and above.
 export enum MAJOR_RANK {
   No = 1,
@@ -92,7 +94,7 @@ export class Rank {
     this.minorRank = minorRank;
     this.points = points + delta;
 
-    // Amae servers doesnt actually store the latest rank points, need to calculate it using points + delta. 
+    // Amae servers doesnt actually store the latest rank points, need to calculate it using points + delta.
     // We need to handle overflow, e.g. points=1350/1400 + delta=100 => 1450/1400.
     if (this.points >= this.getUpgradePts()) {
       this.minorRank += 1;
@@ -145,6 +147,18 @@ export class Rank {
   // E.g. 1350/1400
   ptsToString(): string {
     return `${this.points}/${this.getUpgradePts()}`;
+  }
+
+  getAnsiColor(): ANSI_COLOR {
+    const colors = {
+      [MAJOR_RANK.No]: ANSI_COLOR.DEFAULT,
+      [MAJOR_RANK.Ad]: ANSI_COLOR.DEFAULT,
+      [MAJOR_RANK.Ex]: ANSI_COLOR.YELLOW,
+      [MAJOR_RANK.Ms]: ANSI_COLOR.RED,
+      [MAJOR_RANK.St]: ANSI_COLOR.PINK,
+      [MAJOR_RANK.Cl]: ANSI_COLOR.BLUE,
+    };
+    return colors[this.majorRank];
   }
 
   // E.g. Ex2

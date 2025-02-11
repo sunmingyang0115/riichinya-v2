@@ -10,7 +10,7 @@ export enum MJS_ERROR_TYPE {
   NICK_AMAE_MISMATCH,
   NO_LINKED_USER,
   ARGUMENT_ERROR,
-  DATA_ERROR
+  DATA_ERROR,
 }
 
 export type MjsError = {
@@ -177,3 +177,19 @@ export const formatIdentity = (x: number | string) => x.toString();
 
 export const amaeUrl = (amaeId: string) =>
   `https://amae-koromo.sapk.ch/player/${amaeId}`;
+
+export enum ANSI_COLOR {
+  GRAY = 30,
+  RED = 31,
+  GREEN = 32,
+  YELLOW = 33,
+  BLUE = 34,
+  PINK = 35,
+  CYAN = 36,
+  WHITE = 37,
+  DEFAULT = 0,
+}
+
+export const ansiFormat = (str: string, color: ANSI_COLOR) => {
+  return `\u001b[0;${color as number}m` + str + "\u001b[0m";
+};
