@@ -6,12 +6,13 @@ import {
 } from "./amae_api";
 import {
   ALL_MODES,
+  formatFixed1,
   MJS_MODE,
   PlayerExtendedStatsResponse,
   PlayerStatsResponse,
   Result,
 } from "./common";
-import { Rank } from "./rank";
+import { MAJOR_RANK, Rank } from "./rank";
 
 export class MajsoulUser {
   amaeId: string;
@@ -116,7 +117,7 @@ export class MajsoulUser {
   getPtDeltaStr() {
     const delta = this.getPtDelta();
     if (delta === 0) return "+0";
-    return `${delta > 0 ? "+" : ""}${delta.toString()}`;
+    return `${delta > 0 ? "+" : ""}${this.rank?.majorRank === MAJOR_RANK.Cl ? formatFixed1(delta / 100) : delta.toString()}`;A
   }
 
   /**

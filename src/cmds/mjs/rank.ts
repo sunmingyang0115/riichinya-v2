@@ -2,7 +2,7 @@
  * Everything related to MJS ranks go here in this file.
  */
 
-import { ANSI_COLOR } from "./common";
+import { ANSI_COLOR, formatFixed1, formatFixed3 } from "./common";
 
 // Amae servers should only need support for Expert and above.
 export enum MAJOR_RANK {
@@ -74,7 +74,8 @@ export class Rank {
   points: number;
 
   constructor(amaeRank: number, points: number, delta: number) {
-    const majorRank = Math.floor(amaeRank / 100) % 10;
+    // Celestial is defined as 7 on Amae servers, constrain it to max 6
+    const majorRank = Math.min(Math.floor(amaeRank / 100) % 10, MAJOR_RANK.Cl);
     const minorRank = amaeRank % 100;
 
     if (!Object.values(MAJOR_RANK).includes(majorRank)) {
@@ -88,12 +89,11 @@ export class Rank {
       console.error(`Unknown rank: ${amaeRank}`);
       throw TypeError(`Unknown rank: ${amaeRank}`);
     }
-
-    // Celestial is defined as 7 on Amae servers, constrain it to max 6
-    this.majorRank = Math.min(majorRank, 6) as MAJOR_RANK;
+    
+    this.majorRank = majorRank as MAJOR_RANK;
     this.minorRank = minorRank;
     this.points = points + delta;
-
+    
     // Amae servers doesnt actually store the latest rank points, need to calculate it using points + delta.
     // We need to handle overflow, e.g. points=1350/1400 + delta=100 => 1450/1400.
     if (this.points >= this.getUpgradePts()) {
@@ -115,7 +115,7 @@ export class Rank {
         ].upgradePts;
 
       case MAJOR_RANK.Cl:
-        return 20;
+        return 2000;
 
       default:
         return 0;
@@ -146,6 +146,9 @@ export class Rank {
 
   // E.g. 1350/1400
   ptsToString(): string {
+    if (this.majorRank === MAJOR_RANK.Cl) {
+      return `${formatFixed1(this.points/100)}/${formatFixed1(this.getUpgradePts()/100)}`;
+    }
     return `${this.points}/${this.getUpgradePts()}`;
   }
 
