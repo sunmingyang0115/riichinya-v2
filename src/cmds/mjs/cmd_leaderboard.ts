@@ -59,10 +59,10 @@ export const leaderboardHandler = async (
     // Fetch user data in parallel to save time
     const majsoulUsers = await Promise.all(promises);
 
-    const headers = ["", "Name", "Points", "+/-"];
+    const headers = ["", "Rank", "Name", "Points", "+/-"];
 
     // If username is longer than this, insert newline in table.
-    const USERNAME_WRAP_LEN = 14;
+    const USERNAME_WRAP_LEN = 13;
     // Points required to colour the delta red/green.
     const PT_DELTA_THRESHOLD = 50;
 
@@ -76,7 +76,7 @@ export const leaderboardHandler = async (
         let ptsString = user.rank.ptsToString();
 
         let rankStr = ansiFormat(
-          `[${user.rank.rankToShortString()}]`,
+          user.rank.rankToShortString(),
           user.rank.getAnsiColor()
         );
 
@@ -100,7 +100,8 @@ export const leaderboardHandler = async (
 
         return [
           index + 1,
-          `${rankUpgradeEmoji}${rankStr} ${nicknameDisplay}`,
+          `${rankStr}${rankUpgradeEmoji}`,
+          `${nicknameDisplay}`,
           ptsString,
           deltaStr,
         ];
@@ -111,10 +112,15 @@ export const leaderboardHandler = async (
     // Have username on the very right side of the left table as to not cause problems
     // for the rest of the table.
     // Use custom borders to make the illusion of one contiguous table.
-    
+
+    const COL_TO_SPLIT = 3;
+
     // Ranking and username
     const leftSide = table(
-      [headers.slice(0, 2), ...rows.map((row) => row.slice(0, 2))],
+      [
+        headers.slice(0, COL_TO_SPLIT),
+        ...rows.map((row) => row.slice(0, COL_TO_SPLIT)),
+      ],
       {
         border: {
           bodyRight: " ",
@@ -127,10 +133,13 @@ export const leaderboardHandler = async (
         },
       }
     );
-    
+
     // Points and delta
     const rightSide = table(
-      [headers.slice(2), ...rows.map((row) => row.slice(2))],
+      [
+        headers.slice(COL_TO_SPLIT),
+        ...rows.map((row) => row.slice(COL_TO_SPLIT)),
+      ],
       {
         border: { bodyLeft: "│", joinLeft: "┼", topLeft: "╤", bottomLeft: "╧" },
         drawHorizontalLine: (lineIndex, rowCount) => {
