@@ -8,7 +8,7 @@ import {
   Message,
   spoiler,
 } from "discord.js";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import BotProperties from "../../bot_properties.json";
 import dayjs from "dayjs";
 import sharp from "sharp";
@@ -257,6 +257,11 @@ export const prepareWwydEmbed = async (
   embed: EmbedBuilder,
   useToday = true
 ): Promise<{ attachment: string; name: string }[]> => {
+  // Used as the output directory for generated images.
+  if (!existsSync("tmp")) {
+    mkdirSync("tmp");
+  }
+
   const wwyds: Wwyd[] = JSON.parse(
     readFileSync("assets/wwyd-new.json", "utf-8")
   );
