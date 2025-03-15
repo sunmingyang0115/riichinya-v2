@@ -171,7 +171,7 @@ export class Rank {
 
   // TODO: Update this to be on the main repo, not a fork.
   getImage(): string {
-    const ROOT_ASSETS_URL = `https://raw.githubusercontent.com/danielq987/riichinya-v2/refs/heads/main/assets`;
+    const ROOT_ASSETS_URL = `https://raw.githubusercontent.com/sunmingyang0115/riichinya-v2/refs/heads/main/assets`;
     return `${ROOT_ASSETS_URL}/${this.rankToShortString()}.png`;
   }
 }

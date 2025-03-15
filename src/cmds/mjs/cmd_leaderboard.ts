@@ -42,6 +42,7 @@ export const leaderboardHandler = async (
     };
 
     let sortKey: keyof typeof sortOptions = "points";
+    let pageIndex = 1;
 
     if (args[0] && args[0].trim().toLowerCase().includes("--sort-by=")) {
       const key = args[0].trim().toLowerCase().replace("--sort-by=", "");
@@ -49,6 +50,10 @@ export const leaderboardHandler = async (
         throw "Unrecognized sort key.";
       }
       sortKey = key as keyof typeof sortOptions;
+    }
+    
+    if (args[0] && !isNaN(parseInt(args[0]))) {
+      pageIndex = parseInt(args[0]);
     }
 
     const promises = linkedAccounts.map((user) => {
@@ -65,6 +70,7 @@ export const leaderboardHandler = async (
     const USERNAME_WRAP_LEN = 13;
     // Points required to colour the delta red/green.
     const PT_DELTA_THRESHOLD = 50;
+    const MAX_ROWS = 15;
 
     const rows = majsoulUsers
       .sort(sortOptions[sortKey].cmp)
@@ -107,6 +113,11 @@ export const leaderboardHandler = async (
         ];
       });
 
+    pageIndex = Math.min(pageIndex, Math.ceil(rows.length / MAX_ROWS));
+    
+    // Add fake pagination because discord cant have more than 1024 characters in a field.
+    const pagedRows = rows.slice((pageIndex - 1) * MAX_ROWS, pageIndex * MAX_ROWS);
+
     // Split table into left and right half because DISCORD'S MONOSPACE FONT
     // ISNT MONOSPACE FOR NON-LATIN CHARACTERS
     // Have username on the very right side of the left table as to not cause problems
@@ -123,7 +134,7 @@ export const leaderboardHandler = async (
     const leftSide = table(
       [
         headers.slice(0, COL_TO_SPLIT),
-        ...rows.map((row) => row.slice(0, COL_TO_SPLIT)),
+        ...pagedRows.map((row) => row.slice(0, COL_TO_SPLIT)),
       ],
       {
         border: {
@@ -140,7 +151,7 @@ export const leaderboardHandler = async (
     const rightSide = table(
       [
         headers.slice(COL_TO_SPLIT),
-        ...rows.map((row) => row.slice(COL_TO_SPLIT)),
+        ...pagedRows.map((row) => row.slice(COL_TO_SPLIT)),
       ],
       {
         border: { bodyLeft: "│", joinLeft: "┼", topLeft: "╤", bottomLeft: "╧" },
