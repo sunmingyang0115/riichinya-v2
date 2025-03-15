@@ -11,7 +11,7 @@ export class ClientReadyHandler implements EventBuilder {
   }
   async getEventCallFunction(c: Client) {
     console.log("Client", c.user!.displayName, "online!");
-    const wwydJob = new CronJob('0 8 * * *', () => {
+    const wwydJob = new CronJob('0 10 * * *', () => {
       const channelLookupFile = "wwyd_channels.json";
       if (!existsSync(channelLookupFile)) {
         return;

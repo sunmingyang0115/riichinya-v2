@@ -33,6 +33,10 @@ export class WwydCommand implements CommandBuilder {
     return new DocBuilder()
       .addSingleSubCom("ron", ExpectedType.LITERAL, "")
       .addSingleSubCom("wwyd", ExpectedType.LITERAL, "")
+      .addSingleSubCom("today", ExpectedType.LITERAL, "Get today's wwyd")
+      .back()
+      .addSingleSubCom("random", ExpectedType.LITERAL, "Get random wwyd")
+      .back()
       .addSingleSubCom("enable", ExpectedType.LITERAL, "")
       .addSingleSubCom(
         "channelId",
@@ -91,7 +95,7 @@ export class WwydCommand implements CommandBuilder {
           channels[event.guildId as string] = channelId;
           return channels;
         });
-        eb.addContent(`Enabled sending daily WWYD's in <#${channelId}>.`);
+        eb.addContent(`Enabled sending daily WWYD's in <#${channelId}> at 10am every day.`);
       } else {
         eb.addContent(`Channel does not exist.`);
       }
