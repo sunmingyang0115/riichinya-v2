@@ -260,7 +260,7 @@ export const prepareWwydEmbed = async (
   const wwyds: Wwyd[] = JSON.parse(
     readFileSync("assets/wwyd-new.json", "utf-8")
   );
-  const START_DATE = dayjs("2025-03-15");
+  const START_DATE = dayjs("2025-03-16");
   const today = dayjs();
   const wwyd = useToday
     ? wwyds[START_DATE.diff(today, "day")]
