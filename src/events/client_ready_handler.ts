@@ -26,7 +26,11 @@ export class ClientReadyHandler implements EventBuilder {
         const channel = c.channels.cache.get(channelId) as TextChannel;
         channel.send({ embeds: [eb], files: files });
       });
-    });
+    },
+    null,
+    true,
+    "America/Toronto"
+  );
     wwydJob.start();
   }
 }

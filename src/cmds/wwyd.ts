@@ -268,9 +268,9 @@ export const prepareWwydEmbed = async (
   const START_DATE = dayjs("2025-03-16");
   const today = dayjs();
   const wwyd = useToday
-    ? wwyds[START_DATE.diff(today, "day")]
+    ? wwyds[today.diff(START_DATE, "day")]
     : wwyds[Math.floor(Math.random() * wwyds.length)];
-
+    
   embed.setTitle(`Answer: ${spoiler(wwyd.answer)}`);
 
   const parseCommentElements = (str: string[] | string) => {
