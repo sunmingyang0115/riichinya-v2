@@ -11,7 +11,7 @@ import {
 import dayjs, { Dayjs } from "dayjs";
 import TTLCache from "@isaacs/ttlcache";
 
-const API_ROOT = "https://5-data.amae-koromo.com/api/v2/pl4";
+const API_ROOT = "https://4.data.amae-koromo.com/api/v2/pl4";
 
 // Cache with 5 minutes TTL
 const cache = new TTLCache({ max: 1000, ttl: 1000 * 60 * 10 });
