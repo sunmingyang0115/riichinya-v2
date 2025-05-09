@@ -150,7 +150,7 @@ export const leaderboardHandler = async (
     // for the rest of the table.
     // Use custom borders to make the illusion of one contiguous table.
 
-    const COL_TO_SPLIT = 3;
+    const COL_TO_SPLIT = 2;
     
     const drawHorizontalLine = (lineIndex: number, rowCount: number) => {
           return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount || lineIndex % 5 === 1;
