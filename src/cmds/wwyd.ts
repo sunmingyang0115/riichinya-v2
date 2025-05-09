@@ -271,7 +271,7 @@ export const prepareWwydEmbed = async (
     ? wwyds[today.diff(START_DATE, "day")]
     : wwyds[Math.floor(Math.random() * wwyds.length)];
     
-  embed.setTitle(`Answer: ${spoiler(wwyd.answer)}`);
+  embed.setTitle(`Answer: \\| ${spoiler(wwyd.answer)} \\|`);
 
   const parseCommentElements = (str: string[] | string) => {
     if (!Array.isArray(str)) {

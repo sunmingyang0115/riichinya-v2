@@ -172,6 +172,7 @@ export const formatPercent = (x: any) => {
 };
 
 export const formatFixed3 = (x: number) => x.toFixed(3);
+export const formatFixed2 = (x: number) => x.toFixed(2);
 export const formatFixed1 = (x: number) => x.toFixed(1);
 export const formatRound = (x: number) => Math.round(x).toString();
 export const formatIdentity = (x: number | string) => x.toString();

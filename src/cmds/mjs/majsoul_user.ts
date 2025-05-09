@@ -13,6 +13,7 @@ import {
   Result,
 } from "./common";
 import { MAJOR_RANK, Rank } from "./rank";
+import { ThreadMemberFlagsBitField } from "discord.js";
 
 export class MajsoulUser {
   amaeId: string;
@@ -21,6 +22,7 @@ export class MajsoulUser {
   recentResults?: Result[];
   rank?: Rank;
   rankLastWeek?: Rank;
+  avgPlacement?: number;
   playerStats: { [modeStr: string]: PlayerStatsResponse } = {};
   extendedStats: { [modeStr: string]: PlayerExtendedStatsResponse } = {};
   constructor(amaeId: string) {
@@ -219,13 +221,25 @@ export class MajsoulUser {
    * @returns
    */
   async fetchLightStats() {
-    const playerStats = await getPlayerStats(
-      this.amaeId,
-      undefined,
-      undefined,
-      undefined
-    );
+    const startDate = dayjs().subtract(6, "months");
+    let playerStats: PlayerStatsResponse;
+    try {
+      playerStats = await getPlayerStats(
+        this.amaeId,
+        startDate,
+        undefined,
+        undefined
+      );
+    } catch {
+      playerStats = await getPlayerStats(
+        this.amaeId,
+        undefined,
+        undefined,
+        undefined
+      );
+    }
     this.mjsNickname = playerStats.nickname;
+    this.avgPlacement = playerStats.avg_rank;
     this.rank = new Rank(
       playerStats.level.id,
       playerStats.level.score,

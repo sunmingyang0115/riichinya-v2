@@ -2,6 +2,7 @@ import { EmbedBuilder, inlineCode, Message } from "discord.js";
 import { UserIdData, MjsDatabase } from "./sql_db";
 import {
   amaeUrl,
+  formatFixed2,
   formatPercent,
   formatRound,
   MJS_ERROR_TYPE,
@@ -13,12 +14,13 @@ import { MajsoulUser } from "./majsoul_user";
 import { getAmaeIdFromNickname } from "./amae_api";
 import { generateCombinedSvg } from "./charts";
 import sharp from "sharp";
+import { parseArgs } from "util";
 
 type StatConfig = {
   [key: string]: {
     label: string;
-    value: number;
-    formatter: (value: number) => string;
+    value: number | string;
+    formatter: (x: any) => string;
     cmp: (a: number, b: number) => number;
   };
 };
@@ -26,12 +28,13 @@ type StatConfig = {
 /**
  * Stats come from either the playerStats API or extendedStats API
  * This function defines the stats we want to show and gets those values from the right source.
- * 
- * @param playerStats 
- * @param extendedStats 
- * @returns 
+ *
+ * @param playerStats
+ * @param extendedStats
+ * @returns
  */
 const consolidateStats = (
+  majsoulUser: MajsoulUser,
   playerStats: PlayerStatsResponse,
   extendedStats: PlayerExtendedStatsResponse
 ): StatConfig => {
@@ -39,7 +42,29 @@ const consolidateStats = (
   const cmpHigh = (a: number, b: number) => b - a;
   const cmpLow = (a: number, b: number) => a - b;
 
+  const { rank, rankLastWeek } = majsoulUser;
+
+  let rankString = rank!.rankToShortString();
+  let ptsString = rank!.ptsToString();
+
+  if (rankLastWeek) {
+    rankString += majsoulUser.getRankDeltaEmoji();
+    ptsString += ` (${majsoulUser.getPtDeltaStr()})`;
+  }
+
   const stats = {
+    rank: {
+      label: "Rank",
+      value: inlineCode(rankString),
+      formatter: (x: string) => x,
+      cmp: cmpHigh,
+    },
+    points: {
+      label: "Points",
+      value: inlineCode(ptsString),
+      formatter: (x: string) => x,
+      cmp: cmpHigh,
+    },
     recordedMatches: {
       label: "Games",
       value: playerStats.count,
@@ -64,49 +89,54 @@ const consolidateStats = (
       formatter: formatPercent,
       cmp: cmpHigh,
     },
-    // uradoraRate: {
-    //   label: "Uradora Rate",
-    //   value: extendedStats["里宝率"],
-    //   formatter: formatPercent,
-    //   cmp: cmpHigh,
-    // },
+    damaRate: {
+      label: "Dama Rate",
+      value: extendedStats["默听率"],
+      formatter: formatPercent,
+      cmp: cmpHigh,
+    },
+    averageRank: {
+      label: "Average Placement",
+      value: playerStats.avg_rank,
+      formatter: formatFixed2,
+      cmp: cmpLow,
+    },
+    uradoraRate: {
+      label: "Uradora Rate",
+      value: extendedStats["里宝率"],
+      formatter: formatPercent,
+      cmp: cmpHigh,
+    },
   };
   return stats;
 };
 
 /**
  * Writes and formats all the stats into the Discord embed object.
- *  
- * @param statsData 
- * @param embed 
- * @returns 
+ *
+ * @param statsData
+ * @param embed
+ * @returns
  */
 const displaySingleUserStats = (statsData: StatConfig, embed: EmbedBuilder) => {
-  const label = (stat: keyof StatConfig) => statsData[stat].label;
-  const value = (stat: keyof StatConfig) =>
-    inlineCode(statsData[stat].formatter(statsData[stat].value));
-  embed.addFields(
-    {
-      name: label("recordedMatches"),
-      value: value("recordedMatches"),
+  Object.entries(statsData).forEach(([k, v]) => {
+    embed.addFields({
+      name: v.label,
+      value: inlineCode(v.formatter(v.value)),
       inline: true,
-    },
-    { name: label("dealInRate"), value: value("dealInRate"), inline: true },
-    { name: label("winRate"), value: value("winRate"), inline: true },
-    { name: label("callRate"), value: value("callRate"), inline: true }
-    // { name: label("uradoraRate"), value: value("uradoraRate"), inline: true },
-  );
+    })
+  })
 
   return embed;
 };
 
 /**
  * Handler for the stats subcommand.
- * 
- * @param event 
- * @param args 
- * @param embed 
- * @returns 
+ *
+ * @param event
+ * @param args
+ * @param embed
+ * @returns
  */
 export const statsHandler = async (
   event: Message<boolean>,
@@ -118,14 +148,28 @@ export const statsHandler = async (
   const files = [];
   try {
     let userData: UserIdData | null;
-    if (args.length === 0) {
+
+    const options = {
+      limit: {
+        type: "string" as const,
+        short: "l",
+      },
+    };
+
+    const { values: argValues, positionals: argPositionals } = parseArgs({
+      args,
+      options,
+      allowPositionals: true,
+    });
+
+    if (argPositionals.length === 0) {
       userData = await MjsDatabase.getUser(discordAuthor.id);
-    } else if (args.length === 1) {
+    } else if (argPositionals.length === 1) {
       let amaeId: string;
       // This clause checks if the nickname entered is in id format (all digits)
       // If so, bypass the nickname lookup and straight up use arg[0] as amae id.
       if (mjsNickname.match(/^\d+$/g)) {
-        amaeId = args[0];
+        amaeId = argPositionals[0];
       } else {
         amaeId = await getAmaeIdFromNickname(mjsNickname);
       }
@@ -135,20 +179,21 @@ export const statsHandler = async (
         discordId: discordAuthor.id,
       };
     } else {
-      return "Too many arguments: expected 0 or 1 arguments.";
+      return "Too many arguments: expected 0 or 1 positional arguments.";
+    }
+
+    let game_limit = 100;
+    if (argValues.limit && !isNaN(parseInt(argValues.limit))) {
+      game_limit = parseInt(argValues.limit);
     }
 
     if (!userData) {
       throw { mjsErrorType: MJS_ERROR_TYPE.NO_LINKED_USER };
     }
-    
-    // Maybe want to configure this to be a parameter in the future...
-    const GAME_LIMIT = 100;
 
     const majsoulUser = new MajsoulUser(userData.amaeId);
     const { playerStats, playerExtendedStats } =
-      await majsoulUser.fetchFullStats(GAME_LIMIT);
-    const stats = consolidateStats(playerStats, playerExtendedStats);
+      await majsoulUser.fetchFullStats(game_limit);
 
     if (
       !majsoulUser.extendedStats ||
@@ -157,6 +202,12 @@ export const statsHandler = async (
     ) {
       throw MJS_ERROR_TYPE.DATA_ERROR;
     }
+
+    const stats = consolidateStats(
+      majsoulUser,
+      playerStats,
+      playerExtendedStats
+    );
 
     const { rank, rankLastWeek } = majsoulUser;
 
@@ -167,19 +218,9 @@ export const statsHandler = async (
     }
 
     embed
-      .setTitle(`Stats for ${playerStats.nickname}: Last 100 Games`)
+      .setTitle(`Stats for ${playerStats.nickname}: Last ${game_limit} Games`)
       .setURL(amaeUrl(playerStats.id.toString()));
 
-    let rankString = rank.rankToShortString();
-    let ptsString = rank.ptsToString();
-
-    if (rankLastWeek) {
-      rankString += majsoulUser.getRankDeltaEmoji();
-      ptsString += ` (${majsoulUser.getPtDeltaStr()})`;
-    }
-
-    embed.addFields({ name: "Rank", value: inlineCode(rankString), inline: true });
-    embed.addFields({ name: "Points", value: inlineCode(ptsString), inline: true });
     displaySingleUserStats(stats, embed);
 
     const rankImage = rank.getImage();
@@ -211,7 +252,9 @@ export const statsHandler = async (
         const ids = e.data.map(
           (id: string) => `- id ${id}: https://amae-koromo.sapk.ch/player/${id}`
         );
-        return `Multiple players found with username ${inlineCode(mjsNickname)}. Which one are you looking for?\n${ids.join(
+        return `Multiple players found with username ${inlineCode(
+          mjsNickname
+        )}. Which one are you looking for?\n${ids.join(
           "\n"
         )}\nPlease retry with ${inlineCode("ron mjs stats <id>")}`;
 

@@ -1,10 +1,11 @@
 import { codeBlock, EmbedBuilder, inlineCode, Message } from "discord.js";
 import { MjsDatabase } from "./sql_db";
 import { getAmaeIdFromNickname } from "./amae_api";
-import { ANSI_COLOR, ansiFormat, MJS_ERROR_TYPE, MjsError } from "./common";
+import { ANSI_COLOR, ansiFormat, formatFixed2, MJS_ERROR_TYPE, MjsError } from "./common";
 import { MajsoulUser } from "./majsoul_user";
 import { Rank } from "./rank";
 import { table } from "table";
+import { parseArgs } from "util";
 
 /**
  *
@@ -39,23 +40,47 @@ export const leaderboardHandler = async (
           return b.getPtDelta() - a.getPtDelta();
         },
       },
+      placement: {
+        name: "Average Rank",
+        cmp: (a: MajsoulUser, b: MajsoulUser) => {
+          if (!a.avgPlacement || !b.avgPlacement) {
+            throw MJS_ERROR_TYPE.DATA_ERROR;
+          }
+          return a.avgPlacement - b.avgPlacement;
+        },
+      },
     };
 
     let sortKey: keyof typeof sortOptions = "points";
     let pageIndex = 1;
-
-    if (args[0] && args[0].trim().toLowerCase().includes("--sort-by=")) {
-      const key = args[0].trim().toLowerCase().replace("--sort-by=", "");
-      if (!Object.keys(sortOptions).includes(key)) {
-        throw "Unrecognized sort key.";
+    
+    // argument parsing
+    const options = {
+      'sortby': {
+        type: 'string' as const,
+        short: 's'
+      },
+      'page': {
+        type: 'string' as const,
+        short: 'p'
       }
-      sortKey = key as keyof typeof sortOptions;
+    }
+    const {values: argValues, positionals: argPositionals} = parseArgs({args, options, allowPositionals: true});
+    
+    const rawSortKey = argValues.sortby || "points";
+    // Allow page index to be passed in as a positional argument or an option.
+    const rawPageIndex = parseInt(argPositionals[0]) || parseInt(String(argValues.page));
+    
+    if (rawSortKey in sortOptions) {
+      sortKey = rawSortKey as keyof typeof sortOptions;
+    } else {
+      return `Unrecognized sort key. Options are ${Object.keys(sortOptions).map(x => inlineCode(x)).join(', ')}.`
     }
     
-    if (args[0] && !isNaN(parseInt(args[0]))) {
-      pageIndex = parseInt(args[0]);
+    if (!isNaN(rawPageIndex)) {
+      pageIndex = rawPageIndex;
     }
-
+    
     const promises = linkedAccounts.map((user) => {
       const majsoulUser = new MajsoulUser(user.amaeId);
       return majsoulUser.fetchLightStats();
@@ -64,7 +89,7 @@ export const leaderboardHandler = async (
     // Fetch user data in parallel to save time
     const majsoulUsers = await Promise.all(promises);
 
-    const headers = ["", "Rank", "Name", "Points", "+/-"];
+    const headers = ["", "Rank", "Name", "Points", "+/-", "Avg."];
 
     // If username is longer than this, insert newline in table.
     const USERNAME_WRAP_LEN = 13;
@@ -110,6 +135,7 @@ export const leaderboardHandler = async (
           `${nicknameDisplay}`,
           ptsString,
           deltaStr,
+          formatFixed2(user.avgPlacement || 0)
         ];
       });
 
@@ -163,7 +189,7 @@ export const leaderboardHandler = async (
     embed.setTitle(`Server Leaderboard Sorted by ${sortOptions[sortKey].name}`);
     embed.addFields(
       {
-        name: "\u200b",
+        name: `Page ${pageIndex} of ${Math.ceil(rows.length / MAX_ROWS)}`,
         value: codeBlock("ansi", leftSide),
         inline: true,
       },
@@ -173,7 +199,7 @@ export const leaderboardHandler = async (
         inline: true,
       }
     );
-    // embed.setDescription(codeBlock(leftSide));
+    embed.setDescription(`${inlineCode('+/-')}: Rank point change in the past week.\n${inlineCode('Avg.')}: Average hanchan placement over the past 6 months.`);
   } catch (e: any) {
     console.error(e);
     throw e;

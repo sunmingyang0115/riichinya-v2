@@ -25,7 +25,7 @@ export const generatePieChartSvg = (data: number[], xOffset = 0): string => {
     .slice()
     .reverse()
     .map((slice: number, index: number) => {
-      const sliceAngle = slice * 360;
+      const sliceAngle = slice * 360 * 0.999; // random hack allow pie chart with only one sector to render correctly
       const x1 = centerX + radius * Math.cos((Math.PI / 180) * currentAngle);
       const y1 = centerY + radius * Math.sin((Math.PI / 180) * currentAngle);
       const x2 =
