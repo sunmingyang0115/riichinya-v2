@@ -89,7 +89,7 @@ export const leaderboardHandler = async (
     // Fetch user data in parallel to save time
     const majsoulUsers = await Promise.all(promises);
 
-    const headers = ["", "Rank", "Name", "Points", "+/-", "Avg."];
+    const headers = ["Rank", "Name", "Points", "+/-", "Avg."];
 
     // If username is longer than this, insert newline in table.
     const USERNAME_WRAP_LEN = 13;
@@ -130,7 +130,7 @@ export const leaderboardHandler = async (
         }
 
         return [
-          index + 1,
+          // index + 1,
           `${rankStr}${rankUpgradeEmoji}`,
           `${nicknameDisplay}`,
           ptsString,
