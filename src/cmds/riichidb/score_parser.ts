@@ -31,8 +31,15 @@ export function parseScoreFromRaw(args : string[]) : GameInfo {
     
     let sum = players.reduce((acc, cur) => acc + cur.score, 0);
     // I could allow people to input scores like 25.6, but nahh
-    if (sum != starting_score * 4) {
-        throw new Error(`Raw Score sum must be **100000**! Current sum: **${sum}**`);
+    if (sum == starting_score * 4 / 1000) {
+        // if the sum is 100, adjust scores to match 100000
+        players.forEach(player => {
+            player.score *= 1000;
+            player.adj *= 1000;
+        });
+    }
+    else if (sum != starting_score * 4) {
+        throw new Error(`Raw Score sum must be **100000** or **100**! Current sum: **${sum}**`);
     }
 
     // sort players by score descending

@@ -74,75 +74,76 @@ export class RiichiDbCommand implements CommandBuilder {
         return 10;
     }
     async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
-        let a: Client = event.client;
 
-        let reply = (tbl: object[]) => {
-            // console.log(tbl);
-            let eb = new EmbedManager(this.getCommandName(), event.client);
+        //TODO: Handle large amounts of players (don't think it will matter for now)
+        // Manually changing headers is a bit of a hack, should change EmbedManager directly
+        // Will do when I feel like it
+        let reply = (tbl: any[], header: string) => {
+            const eb = new EmbedManager("Season Leaderboard", event.client);
+            for (let i=0;i<tbl.length;i++) {
+                tbl[i].Rank = i + 1;
+                const rankObject = {"Rank": null};
+                //trustttt
+                tbl[i] = Object.assign(rankObject, tbl[i])
+            }
+
+            // map doesn't work for some reason
+            // tbl.forEach((obj, index) => {
+            //     obj.Rank = index + 1;
+            // })
+            // tbl.map((obj) => {
+            //     const rankObject = {"Rank": null};
+            //     return Object.assign(rankObject, obj);
+            // })
+
             eb.addObjectArrayToField(tbl)
+            if (eb.data.fields) {
+                eb.data.fields[1].name = "Player";
+                eb.data.fields[2].name = header;
+            }
             event.reply({ embeds: [eb] });
         };
 
-        if (args.length == 0) {
-            //official leaderboard (just ron rdb sat 1000)
-            let eb = new EmbedManager("Season Leaderboard", event.client);
-            let objectArray = await RiichiDatabase.getLBScore(1000) as any[];
-            //manually adding a field for rank
-
-            for (let i=0;i<objectArray.length;i++) {
-                objectArray[i].Rank = i + 1;
-                let rankObject = {"Rank": null};
-                //trustttt
-                objectArray[i] = Object.assign(rankObject, objectArray[i])
-            }
-            eb.addObjectArrayToField(objectArray);
-            console.log(eb.data.fields);
-            //manually changing field names lolol
-            if (eb.data.fields) {
-                eb.data.fields[1].name = "Player";
-                eb.data.fields[2].name = "Score (adjusted)";
-            }
-            
-            event.reply({ embeds: [eb] });
-            return;
+        if (args.length === 0) {
+            reply(await RiichiDatabase.getLBScore(1000), "Score (Adjusted)");
         }
 
-        if (args[0] == 'init') {
+        if (args[0] === 'init') {
             RiichiDatabase.init();
-        } else if (args[0] == 'insert') {
+        } else if (args[0] === 'insert') {
             // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
-        } else if (args[0] == 'list') {
-            // let reply = (res : object[]) => event.reply(JSON.stringify(res));
-            let amount = Number(args[2]);
-            if (Number.isNaN(amount)) amount = 10;
-            if (args[1] == 'rank_average' || args[1] == 'ra') {
-                reply(await RiichiDatabase.getLBAveragePlacement(amount));
-            } else if (args[1] == 'score_adj_total' || args[1] == 'sat') {
-                reply(await RiichiDatabase.getLBScore(amount));
-            } else if (args[1] == 'score_raw_total' || args[1] == 'srt') {
-                reply(await RiichiDatabase.getLBScoreRaw(amount));
-            } else if (args[1] == 'score_adj_average' || args[1] == 'saa') {
-                reply(await RiichiDatabase.getLBAverageScore(amount));
-            } else if (args[1] == 'score_raw_average' || args[1] == 'sra') {
-                reply(await RiichiDatabase.getLBAverageScoreRaw(amount));
-            } else if (args[1] == 'game_total' || args[1] == 'gt') {
-                reply(await RiichiDatabase.getLBGamesPlayed(amount));
-            } else if (args[1] == 'game_recent' || args[1] == 'gr') {
-                reply(await RiichiDatabase.getLBRecentGames(amount));
+        } else if (args[0] === 'list') {
+            const amount = Number.isNaN(args[2]) ? 10 : Number(args[2]);
+            if (args[1] === 'rank_average' || args[1] === 'ra') {
+                reply(await RiichiDatabase.getLBAveragePlacement(amount), "Average Rank");
+            } else if (args[1] === 'score_adj_total' || args[1] === 'sat') {
+                reply(await RiichiDatabase.getLBScore(amount), "Score (Adjusted)");
+            } else if (args[1] === 'score_raw_total' || args[1] === 'srt') {
+                reply(await RiichiDatabase.getLBScoreRaw(amount), "Score (Raw)");
+            } else if (args[1] === 'score_adj_average' || args[1] === 'saa') {
+                reply(await RiichiDatabase.getLBAverageScore(amount), "Score (Adjusted Average)");
+            } else if (args[1] === 'score_raw_average' || args[1] === 'sra') {
+                reply(await RiichiDatabase.getLBAverageScoreRaw(amount), "Score (Raw Average)");
+            } else if (args[1] === 'game_total' || args[1] === 'gt') {
+                reply(await RiichiDatabase.getLBGamesPlayed(amount), "Games Played (Total)");
+            } else if (args[1] === 'game_recent' || args[1] === 'gr') {
+                reply(await RiichiDatabase.getLBRecentGames(amount), "Recent Games Played");
             }
-        } else if (args[0] == 'get') {
-            let id = args[2];
+        } else if (args[0] === 'get') {
+            const id = args[2].replace(/<@|>/g, "")
             // check if provided id is comprised of numbers
             if (!/^\d+$/.test(id)) {
                 throw Error("invalid player/game id");
             }
-            if (args[1] == 'player') {
-                reply(await RiichiDatabase.getPlayerProfile(id));
-            } else if (args[1] == 'game') {
-                reply(await RiichiDatabase.getGameProfile(id));
+
+            //TODO: Extend player & game commands (never used tho)
+            if (args[1] === 'player') {
+                reply(await RiichiDatabase.getPlayerProfile(id), "score_adj_total");
+            } else if (args[1] === 'game') {
+                reply(await RiichiDatabase.getGameProfile(id), "Date");
             }
-        } else if (args[0] == 'csv') {
-            let data = await RiichiDatabase.getEntireDB();
+        } else if (args[0] === 'csv') {
+            const data = await RiichiDatabase.getEntireDB();
             // gpt code 
             const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("DataGame.csv");
             const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("DataPlayer.csv");
