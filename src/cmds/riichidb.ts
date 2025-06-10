@@ -83,6 +83,30 @@ export class RiichiDbCommand implements CommandBuilder {
             event.reply({ embeds: [eb] });
         };
 
+        if (args.length == 0) {
+            //official leaderboard (just ron rdb sat 1000)
+            let eb = new EmbedManager("Season Leaderboard", event.client);
+            let objectArray = await RiichiDatabase.getLBScore(1000) as any[];
+            //manually adding a field for rank
+
+            for (let i=0;i<objectArray.length;i++) {
+                objectArray[i].Rank = i + 1;
+                let rankObject = {"Rank": null};
+                //trustttt
+                objectArray[i] = Object.assign(rankObject, objectArray[i])
+            }
+            eb.addObjectArrayToField(objectArray);
+            console.log(eb.data.fields);
+            //manually changing field names lolol
+            if (eb.data.fields) {
+                eb.data.fields[1].name = "Player";
+                eb.data.fields[2].name = "Score (adjusted)";
+            }
+            
+            event.reply({ embeds: [eb] });
+            return;
+        }
+
         if (args[0] == 'init') {
             RiichiDatabase.init();
         } else if (args[0] == 'insert') {
