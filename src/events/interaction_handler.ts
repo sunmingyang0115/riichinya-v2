@@ -3,7 +3,7 @@ import { parseScoreFromRaw } from "../cmds/riichidb/score_parser";
 import { RiichiDatabase } from "../cmds/riichidb/sql_db";
 import { EmbedManager } from "../data/embed_manager";
 import { EventBuilder } from "../data/event_manager";
-import { Events, Interaction } from "discord.js"
+import { Events, Interaction, MessageFlags } from "discord.js"
 import BotProperties from "../../bot_properties.json"
 
 export class InteractionHandler implements EventBuilder {
@@ -14,15 +14,22 @@ export class InteractionHandler implements EventBuilder {
         if (!interaction.isMessageContextMenuCommand()) return;
         if (!BotProperties.writeAccess.includes(interaction.user.id)) return;
 
-        let str = interaction.targetMessage.content;
-        let splice = str.replace(/<@|>/g, "").split(/\s+/g);
-        let content = `Successful id:${interaction.targetMessage.id!}`;
         try {
+            let str = interaction.targetMessage.content;
+            
+            //make sure the message mentions 4 users
+            let mentions = interaction.targetMessage.mentions.members?.size;
+            if (mentions !== 4) {
+                throw new Error(`Message must mention 4 users, but found ${mentions}.`);
+            }
+            let splice = str.replace(/<@|>/g, "").split(/\s+/g);
+            let content = `Successful id:${interaction.targetMessage.id!}`;
+        
             await RiichiDatabase.insertData(interaction.targetMessage.id!, parseScoreFromRaw(splice));
             await interaction.targetMessage.react("📥");
             await interaction.reply({
                 embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         } catch (e : any) {
             await interaction.reply({embeds : [EmbedManager.createErrorEmbed(e, interaction.client)]});

@@ -1,7 +1,9 @@
 import { assert } from "console";
 import { GameInfo } from "./sql_db";
-const starting_score = 30000;
+const starting_score = 25000;
 const uma = [15, 5, -5, -15];
+
+//Add oka implementation if needed
 
 /**
      * parses raw spliced strings of user ids and scores into a sorted GameInfo
@@ -22,76 +24,55 @@ export function parseScoreFromRaw(args : string[]) : GameInfo {
         }
     }
 
-    let idList = [args[0], args[2], args[4], args[6]]
-    let scoreList = [Number(args[1]), Number(args[3]), Number(args[5]), Number(args[7])];
-    formatScores(scoreList);
-
-    let gameInfo = listToGameInfo(idList, scoreList);
-
-    return gameInfo;
-}
-
-/**
- * formats scores into 'thousand' notation (mangan is 8000 not 8.0)
- * if score is represented as 'decimal' notation, will be converted to 'thousand' (8.0 => 8000)
- */
-function formatScores(unparsedScore : Array<number>) {
-    let sum = unparsedScore.reduce((acc, cur) => acc + cur, 0);
-    if (sum <= 100) {
-        unparsedScore.map((score, i) => unparsedScore[i] = Math.round(1000*score))
-    } else {
-        unparsedScore.map((score, i) => unparsedScore[i] = Math.round(score))
-    }
-}
-
-// probably more elegant/efficient way but im low level enjoyer 
-function getHighestScore(idList : Array<string>, scoreList: Array<number>) : number {
-    assert(idList.length == scoreList.length, "id/score list length must match")
-    let iHigh = 0;
-    let scoreHigh = scoreList[0];
-    for (let i = 1; i < idList.length; i++) {
-        if (scoreHigh < scoreList[i]) {
-            iHigh = i;
-            scoreHigh = scoreList[i];
-        }
-    }
-    return iHigh;
-}
-
-// converts idList and scoreList to gameInfo
-function listToGameInfo(idList : Array<string>, scoreList: Array<number>) : GameInfo {
-    // O(n^2) (but n is 4 so its fine)
-    let gameInfo : GameInfo = {
-        id: [],
-        scoreRaw: [],
-        scoreAdj: []
-    };
-    while (idList.length != 0) {
-        let index = getHighestScore(idList, scoreList);
-        gameInfo.id.push(idList[index]);
-        gameInfo.scoreRaw.push(scoreList[index]);
-        idList.splice(index, 1);
-        scoreList.splice(index, 1);
-    }
-    // End points - Starting + 1000 * Uma
-    for (let i = 0; i < gameInfo.scoreRaw.length; i++) {
-        gameInfo.scoreAdj[i] = gameInfo.scoreRaw[i] - starting_score + 1000 * uma[i];
-    }
-    return gameInfo;
-}
-
-// /**
-//  * does end score adjustment * 1000 (we do this to mitigate fp-errors)
-//  * adjustment calculation:
-//  *      End score = End points - Starting + 1000 * Uma
-//  * @param parsed the GameInfo with unadjusted and formatted scores @see formatScores
-//  * @returns GameInfo that is adjusted and formatted
-//  */
-// function adjustScoreAndSort(parsed : GameInfo) {
-//     parsed.sort((a, b) => b.value - a.value);
+    let players = [{ id: args[0], score: Number(args[1]), adj: Number(args[1]) },
+        { id: args[2], score: Number(args[3]), adj: Number(args[3]) },
+        { id: args[4], score: Number(args[5]), adj: Number(args[5]) },
+        { id: args[6], score: Number(args[7]), adj: Number(args[7]) }];
     
-//     console.log(parsed);
-//     parsed.map((e, i) => parsed[i].value = e.value + 1000 * uma[i] - starting_score);
-//     console.log(parsed);
-//     return parsed;
-// }
+    let sum = players.reduce((acc, cur) => acc + cur.score, 0);
+    // I could allow people to input scores like 25.6, but nahh
+    if (sum == starting_score * 4 / 1000) {
+        // if the sum is 100, adjust scores to match 100000
+        players.forEach(player => {
+            player.score *= 1000;
+            player.adj *= 1000;
+        });
+    }
+    else if (sum != starting_score * 4) {
+        throw new Error(`Raw Score sum must be **100000** or **100**! Current sum: **${sum}**`);
+    }
+
+    // sort players by score descending
+    players.sort((a, b) => b.score - a.score);
+
+    //allocating uma, splitting if needed (big brain technique used ngl)
+    for (let i = 0; i < players.length; i++) {
+        let currentUma = uma[i];
+        let tiedCount = 1
+        for (let j=i+1; j < players.length;j++) {
+            if (players[j].score == players[i].score) {
+                currentUma += uma[j];
+                tiedCount++;
+            } else {
+                break;
+            }
+        }
+        for (let j=0; j < tiedCount; j++) {
+            players[i + j].adj += (currentUma * 1000) / tiedCount;
+        }
+        i += tiedCount - 1; // skip over tied players
+    }
+
+    // subtract starting score from adjusted scores
+    players.forEach(player => {
+        player.adj -= starting_score;
+    });
+
+    let gameInfo : GameInfo = {
+        id: players.map(p => p.id),
+        scoreRaw: players.map(p => p.score),
+        scoreAdj: players.map(p => p.adj)
+    }
+
+    return gameInfo;
+}
