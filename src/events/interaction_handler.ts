@@ -18,7 +18,8 @@ export class InteractionHandler implements EventBuilder {
             let str = interaction.targetMessage.content;
             
             //make sure the message mentions 4 users
-            let mentions = interaction.targetMessage.mentions.members?.size;
+            // mentions.member does not recognize all pinged members - using mentions.users instead
+            let mentions = interaction.targetMessage.mentions.users?.size;
             if (mentions !== 4) {
                 throw new Error(`Message must mention 4 users, but found ${mentions}.`);
             }

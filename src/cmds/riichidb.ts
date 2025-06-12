@@ -113,7 +113,10 @@ export class RiichiDbCommand implements CommandBuilder {
         } else if (args[0] === 'insert') {
             // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
         } else if (args[0] === 'list') {
-            const amount = Number.isNaN(args[2]) ? 10 : Number(args[2]);
+            let amount = 10;
+            if (args.length >= 2 || !Number.isNaN(args[2])) {
+                amount = Number(args[2]);
+            }
             if (args[1] === 'rank_average' || args[1] === 'ra') {
                 reply(await RiichiDatabase.getLBAveragePlacement(amount), "Average Rank");
             } else if (args[1] === 'score_adj_total' || args[1] === 'sat') {
