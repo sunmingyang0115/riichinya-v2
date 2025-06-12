@@ -114,7 +114,7 @@ export class RiichiDbCommand implements CommandBuilder {
             // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
         } else if (args[0] === 'list') {
             let amount = 10;
-            if (args.length >= 2 || !Number.isNaN(args[2])) {
+            if (args[2] !== undefined && !Number.isNaN(args[2])) {
                 amount = Number(args[2]);
             }
             if (args[1] === 'rank_average' || args[1] === 'ra') {
