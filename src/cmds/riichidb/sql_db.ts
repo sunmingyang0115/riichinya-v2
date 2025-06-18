@@ -243,7 +243,7 @@ export class RiichiDatabase {
             score_raw_3 / 1000.0 AS score_raw_3,
             score_raw_4 / 1000.0 AS score_raw_4
             FROM DataGame
-            WHERE id_game = ${id}`);
+            WHERE id_game = ?`, id);
     }
 
     static async getEntireDB() {
