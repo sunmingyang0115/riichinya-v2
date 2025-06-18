@@ -1,7 +1,7 @@
 import { Message, Client, AttachmentBuilder } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
-import { RiichiDatabase } from "./riichidb/sql_db";
+import { DataGameSQLEntry, DataPlayerSQLEntry, RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
 import { EmbedManager } from "../data/embed_manager";
 import { parse } from "json2csv";
@@ -151,6 +151,53 @@ export class RiichiDbCommand implements CommandBuilder {
             const gamedata = new AttachmentBuilder(Buffer.from(parse(data[0]), 'utf-8')).setName("DataGame.csv");
             const playerdata = new AttachmentBuilder(Buffer.from(parse(data[1]), 'utf-8')).setName("DataPlayer.csv");
             event.reply({ files: [playerdata, gamedata] });
+        } else if (args[0] === 'verify') {
+            const entire_db = await RiichiDatabase.getEntireDB();
+            const gamedata_sqltbl = entire_db[0] as DataGameSQLEntry[];
+            const playerdata_sqltbl = entire_db[1] as DataPlayerSQLEntry[];
+
+            const adj_map: Map<string, number> = new Map();
+            const raw_map: Map<string, number> = new Map();
+            const games_played_map: Map<string, number> = new Map();
+            const rank_total_map: Map<string, number> = new Map();
+
+            gamedata_sqltbl.forEach((e) => {
+                adj_map.set(e.id_player_1, e.score_adj_1 + (adj_map.get(e.id_player_1) ?? 0));
+                adj_map.set(e.id_player_2, e.score_adj_2 + (adj_map.get(e.id_player_2) ?? 0));
+                adj_map.set(e.id_player_3, e.score_adj_3 + (adj_map.get(e.id_player_3) ?? 0));
+                adj_map.set(e.id_player_4, e.score_adj_4 + (adj_map.get(e.id_player_4) ?? 0));
+
+                raw_map.set(e.id_player_1, e.score_raw_1 + (raw_map.get(e.id_player_1) ?? 0));
+                raw_map.set(e.id_player_2, e.score_raw_2 + (raw_map.get(e.id_player_2) ?? 0));
+                raw_map.set(e.id_player_3, e.score_raw_3 + (raw_map.get(e.id_player_3) ?? 0));
+                raw_map.set(e.id_player_4, e.score_raw_4 + (raw_map.get(e.id_player_4) ?? 0));
+
+                games_played_map.set(e.id_player_1, 1 + (games_played_map.get(e.id_player_1) ?? 0));
+                games_played_map.set(e.id_player_2, 1 + (games_played_map.get(e.id_player_2) ?? 0));
+                games_played_map.set(e.id_player_3, 1 + (games_played_map.get(e.id_player_3) ?? 0));
+                games_played_map.set(e.id_player_4, 1 + (games_played_map.get(e.id_player_4) ?? 0));
+
+                rank_total_map.set(e.id_player_1, 1 + (rank_total_map.get(e.id_player_1) ?? 0));
+                rank_total_map.set(e.id_player_2, 2 + (rank_total_map.get(e.id_player_2) ?? 0));
+                rank_total_map.set(e.id_player_3, 3 + (rank_total_map.get(e.id_player_3) ?? 0));
+                rank_total_map.set(e.id_player_4, 4 + (rank_total_map.get(e.id_player_4) ?? 0));
+            });
+
+            let adj_diff = 0;
+            let raw_diff = 0;
+            let game_total_diff = 0;
+            let rank_total_diff = 0;
+            playerdata_sqltbl.forEach((e) => {
+                adj_diff += adj_map.get(e.id_player) == e.score_adj_total ? 0 : 1;
+                raw_diff += raw_map.get(e.id_player) == e.score_raw_total ? 0 : 1;
+                game_total_diff += games_played_map.get(e.id_player) == e.game_total ? 0 : 1;
+                rank_total_diff += rank_total_map.get(e.id_player) == e.rank_total ? 0 : 1;
+            }, true);
+
+            
+            await event.reply(`Checked ${gamedata_sqltbl.length} GameData and ${playerdata_sqltbl.length} PlayerData entries. Found ${adj_diff}(adj), ${raw_diff}(raw), ${game_total_diff}(gt), ${rank_total_diff}(rt) discrepancies.` );
+            
+            
         }
     }
 

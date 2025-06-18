@@ -1,7 +1,30 @@
 import sqlite3 from 'sqlite3'
 import { open, Database } from 'sqlite'
 
-const date = new Date();
+export type DataGameSQLEntry = {
+    id_game: string,
+    date: number,
+    id_player_1: string,
+    id_player_2: string,
+    id_player_3: string,
+    id_player_4: string,
+    score_raw_1: number,
+    score_raw_2: number,
+    score_raw_3: number,
+    score_raw_4: number,
+    score_adj_1: number,
+    score_adj_2: number,
+    score_adj_3: number,
+    score_adj_4: number,
+}
+
+export type DataPlayerSQLEntry = {
+    id_player: string,
+    score_raw_total: number,
+    score_adj_total: number,
+    rank_total: number,
+    game_total: number
+}
 
 export type GameInfo = {
     id: string[]
@@ -72,98 +95,125 @@ export class RiichiDatabase {
             game_total      INTEGER NOT NULL)`);
     }
 
+
+    static async hasGameID(id: string): Promise<boolean> {
+        if (this.db == null) await this.init();
+        const row = await this.db!.all(
+            `SELECT COUNT (*) FROM DataGame WHERE id_game = ?`, id
+        );
+        return row[0]['COUNT (*)'] == 1;
+    }
+
     static async insertData(id: string, data: GameInfo) {
         if (this.db == null) await this.init();
 
         console.log(data);
 
         let stmt: string[] = [];
-        let curtime = date.getTime().toString();
+        let curtime = new Date().getTime().toString();
         stmt.push(id);
         stmt.push(curtime);
         for (let i = 0; i < data.id.length; i++) {
             let id = data.id[i];
             let scoreRaw = data.scoreRaw[i];
             let scoreAdj = data.scoreAdj[i];
-            this.db!.run(`
-                INSERT INTO DataPlayer (id_player, score_raw_total, score_adj_total, rank_total, game_total) VALUES (${id}, ${scoreRaw}, ${scoreAdj}, ${i + 1}, ${1}) 
+            await this.db!.run(`
+                INSERT INTO DataPlayer (id_player, score_raw_total, score_adj_total, rank_total, game_total) VALUES ($id, $scoreRaw, $scoreAdj, $ix1, 1) 
                 ON CONFLICT (id_player) DO UPDATE SET 
-                score_raw_total = score_raw_total + ${scoreRaw},
-                score_adj_total = score_adj_total + ${scoreAdj},
-                rank_total = rank_total + ${i + 1},
-                game_total = game_total + ${1}`);
+                score_raw_total = score_raw_total + $scoreRaw,
+                score_adj_total = score_adj_total + $scoreAdj,
+                rank_total = rank_total + $ix1,
+                game_total = game_total + 1`, {
+                    $id: id,
+                    $scoreRaw: scoreRaw,
+                    $scoreAdj: scoreAdj,
+                    $ix1: i + 1,
+                });
 
             stmt.push(id);
             stmt.push(scoreRaw.toString());
             stmt.push(scoreAdj.toString());
         }
-        this.db!.run(`INSERT INTO DataGame (id_game, date, 
+        if (stmt.length != 14) throw Error("assertion failed: stmt is not length 14 (DataGame cannot be inserted)");
+        await this.db!.run(`INSERT INTO DataGame (id_game, date, 
             id_player_1, score_raw_1, score_adj_1, 
             id_player_2, score_raw_2, score_adj_2,
             id_player_3, score_raw_3, score_adj_3,
             id_player_4, score_raw_4, score_adj_4) VALUES
-            (${stmt.join(", ")})`);
+            (?, ?, 
+            ?, ?, ?, 
+            ?, ?, ?, 
+            ?, ?, ?, 
+            ?, ?, ?)`, stmt);
     }
 
     static async getLBAveragePlacement(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             rank_total * 1.0 / game_total AS rank_average
             FROM DataPlayer
             ORDER BY rank_average ASC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBScore(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             score_adj_total / 1000.0 AS score_adj_total
             FROM DataPlayer
             ORDER BY score_adj_total DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBScoreRaw(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             score_raw_total / 1000.0 AS score_raw_total
             FROM DataPlayer
             ORDER BY score_raw_total DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBAverageScore(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             score_adj_total / game_total / 1000.0 AS score_adj_average
             FROM DataPlayer
             ORDER BY score_adj_average DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBAverageScoreRaw(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             score_raw_total / game_total / 1000.0 AS score_raw_average
             FROM DataPlayer
             ORDER BY score_raw_average DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBGamesPlayed(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             game_total
             FROM DataPlayer
             ORDER BY game_total DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
     static async getLBRecentGames(n: number): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_game,
             date
             FROM DataGame
             ORDER BY date DESC
-            LIMIT ${n}`);
+            LIMIT ?`, n);
     }
 
     static async getPlayerProfile(id: string): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_player,
             score_adj_total / 1000.0 AS score_adj_total,
             score_adj_total / 1000.0 / game_total AS score_adj_average,
@@ -172,11 +222,12 @@ export class RiichiDatabase {
             rank_total / game_total AS rank_average,
             game_total
             FROM DataPlayer
-            WHERE id_player = ${id}`);
+            WHERE id_player = ?`, id);
     }
 
     static async getGameProfile(id: string): Promise<object[]> {
-        return await this.queryHelper(`
+        if (this.db == null) await this.init();
+        return await this.db!.all(`
             SELECT id_game,
             date,
             id_player_1,
@@ -195,15 +246,10 @@ export class RiichiDatabase {
             WHERE id_game = ${id}`);
     }
 
-    static async queryHelper(cmd: string): Promise<object[]> {
-        if (this.db == null) await this.init();
-        return await this.db!.all(cmd);
-    }
-
     static async getEntireDB() {
         if (this.db == null) await this.init();
-        let gamedata = await this.queryHelper(`SELECT * FROM DataGame`);
-        let playerdata = await this.queryHelper(`SELECT * FROM DataPlayer`);
+        let gamedata = await this.db!.all(`SELECT * FROM DataGame`);
+        let playerdata = await this.db!.all(`SELECT * FROM DataPlayer`);
         return [gamedata, playerdata];
     }
 
