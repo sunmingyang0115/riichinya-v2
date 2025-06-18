@@ -1,5 +1,5 @@
 
 export interface EventBuilder {
     getEventType() : string;
-    getEventCallFunction(...args: any[]) : void;
+    getEventCallFunction(args: unknown) : void;
 }
