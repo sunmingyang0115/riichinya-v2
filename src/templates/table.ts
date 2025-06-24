@@ -8,6 +8,22 @@ export type TableHeader = {
   sortFunc: (a: any, b: any) => number;
 };
 
+// Default sort functions
+export const sortString = (a: any, b: any): number => {
+  if (typeof a !== "string" || typeof b !== "string") return 0;
+  return a.localeCompare(b);
+};
+
+export const sortNumber = (a: any, b: any): number => {
+  const numA = Number(a);
+  const numB = Number(b);
+  if (isNaN(numA) || isNaN(numB)) return 0;
+  return numA - numB;
+};
+
+
+//some default sort functions here:
+
 /**
  * tableCreator takes in args, rows
  * @param embed 

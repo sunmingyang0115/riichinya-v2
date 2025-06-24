@@ -1,10 +1,11 @@
-import { Message, Client, AttachmentBuilder } from "discord.js";
+import { Message, Client, AttachmentBuilder, Collection } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
 import { DataGameSQLEntry, DataPlayerSQLEntry, RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
 import { EmbedManager } from "../data/embed_manager";
 import { parse } from "json2csv";
+import { playerProfileCreator } from "../templates/playerProfile";
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
@@ -133,7 +134,9 @@ export class RiichiDbCommand implements CommandBuilder {
                 reply(await RiichiDatabase.getLBRecentGames(amount), "Recent Games Played");
             }
         } else if (args[0] === 'me') {
-            reply(await RiichiDatabase.getPlayerProfile(event.author.id), "score_adj_total");
+            // Show the profile of the user who invoked the command
+            const embed = await playerProfileCreator(event.author);
+            event.reply({ embeds: [embed] });
         } else if (args[0] === 'get') {
             const id = args[2].replace(/<@|>/g, "")
             // check if provided id is comprised of numbers
@@ -143,7 +146,13 @@ export class RiichiDbCommand implements CommandBuilder {
 
             //TODO: Extend player & game commands (never used tho)
             if (args[1] === 'player') {
-                reply(await RiichiDatabase.getPlayerProfile(id), "score_adj_total");
+                // Show the profile of the specified player
+                const user = await event.client.users.fetch(id).catch(() => null);
+                if (!user) {
+                    throw Error("User not found");
+                }
+                const embed = await playerProfileCreator(user);
+                event.reply({ embeds: [embed] });
             } else if (args[1] === 'game') {
                 reply(await RiichiDatabase.getGameProfile(id), "Date");
             }
