@@ -132,6 +132,8 @@ export class RiichiDbCommand implements CommandBuilder {
             } else if (args[1] === 'game_recent' || args[1] === 'gr') {
                 reply(await RiichiDatabase.getLBRecentGames(amount), "Recent Games Played");
             }
+        } else if (args[0] === 'me') {
+            reply(await RiichiDatabase.getPlayerProfile(event.author.id), "score_adj_total");
         } else if (args[0] === 'get') {
             const id = args[2].replace(/<@|>/g, "")
             // check if provided id is comprised of numbers
