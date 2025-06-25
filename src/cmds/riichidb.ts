@@ -45,11 +45,8 @@ export class RiichiDbCommand implements CommandBuilder {
 
             .back()
 
-            .beginMultiSubCom("get")
-            .insertMultiSubCom(ExpectedType.LITERAL, "fetches a single data based on following subcategories")
-
             .beginMultiSubCom("player")
-            .insertMultiSubCom(ExpectedType.LITERAL, "getting player data")
+            .insertMultiSubCom(ExpectedType.LITERAL, "getting player data and profile embed")
             .addSingleSubCom("id", ExpectedType.DECIMAL, "id of player")
             .back()
             .back()
@@ -59,8 +56,10 @@ export class RiichiDbCommand implements CommandBuilder {
             .addSingleSubCom("id", ExpectedType.DECIMAL, "id of game")
             .back()
 
+            .back()
 
-
+            .beginMultiSubCom("me")
+            .insertMultiSubCom(ExpectedType.LITERAL, "shows your player profile embed")
             .back()
 
             .beginMultiSubCom("csv")
@@ -137,25 +136,25 @@ export class RiichiDbCommand implements CommandBuilder {
             // Show the profile of the user who invoked the command
             const embed = await playerProfileCreator(event.author);
             event.reply({ embeds: [embed] });
-        } else if (args[0] === 'get') {
-            const id = args[2].replace(/<@|>/g, "")
+        } else if (args[0] === 'player') {
+            const id = args[1].replace(/<@|>/g, "")
             // check if provided id is comprised of numbers
             if (!/^\d+$/.test(id)) {
-                throw Error("invalid player/game id");
+                throw Error("invalid player id");
             }
 
-            //TODO: Extend player & game commands (never used tho)
-            if (args[1] === 'player') {
-                // Show the profile of the specified player
-                const user = await event.client.users.fetch(id).catch(() => null);
-                if (!user) {
-                    throw Error("User not found");
-                }
-                const embed = await playerProfileCreator(user);
-                event.reply({ embeds: [embed] });
-            } else if (args[1] === 'game') {
-                reply(await RiichiDatabase.getGameProfile(id), "Date");
+            // Show the profile of the specified player
+            const user = await event.client.users.fetch(id).catch(() => null);
+            if (!user) {
+                throw Error("User not found");
             }
+            const embed = await playerProfileCreator(user);
+            event.reply({ embeds: [embed] });
+        } else if (args[0] === 'game') {
+            if (!/^\d+$/.test(args[2])) {
+                throw Error("invalid player id");
+            }
+            reply(await RiichiDatabase.getGameProfile(args[2]), "Date");
         } else if (args[0] === 'csv') {
             const data = await RiichiDatabase.getEntireDB();
             // gpt code 

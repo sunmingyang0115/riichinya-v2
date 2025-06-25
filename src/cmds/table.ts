@@ -1,19 +1,15 @@
 import { EmbedBuilder, Message } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
-import { TableHeader, tableCreator } from "../templates/table";
+import { TableHeader, tableCreator, sortNumber, sortString } from "../templates/table";
 export class TableCommand implements CommandBuilder {
 
     getDocumentation(): string {
         return new DocBuilder()
-        .addSingleSubCom("ron", ExpectedType.LITERAL, "")
-        .addSingleSubCom("ping", ExpectedType.LITERAL, "")
-        .beginMultiSubCom("ping-args")
-            .insertMultiSubCom(ExpectedType.TEXT, "replies with provided [ping-args]")
-            .insertMultiSubCom(ExpectedType.EMPTY, "replies with 'pong'")
-        .addExampleDoc("ron ping", "pong", "matches EMPTY type for ping-args")
-        .addExampleDoc("ron ping test 123", "test 123", "likewise matches TEXT argument")
-        .build();
+            .addSingleSubCom("ron", ExpectedType.LITERAL, "")
+            .addSingleSubCom("table", ExpectedType.LITERAL, "displays a formatted table with provided data")
+            .addExampleDoc("ron table", "shows a sample table with rank, user, and score columns", "demonstrates the table output")
+            .build();
     }
     getCommandName(): string {
         return "table";
@@ -22,11 +18,12 @@ export class TableCommand implements CommandBuilder {
         return 0;
     }
     async runCommand(event: Message<boolean>, args: string[]) {
-        let rows = [["1","<@576031405037977600>","5"]]
+        let rows = [["1","<@576031405037977600>","5"],
+    ["2","<@12032984348374>","4"]]
         let headers: TableHeader[] = [
-            {key: "rank", title: "Rank", sortFunc: (a,b) => a - b},
-            {key: "user", title: "User", sortFunc: (a,b) => a - b},
-            {key: "score", title: "Total Score", sortFunc: (a,b) => a -b}
+            {key: "rank", title: "Rank", sortFunc: sortNumber},
+            {key: "user", title: "User", sortFunc: sortString},
+            {key: "score", title: "Total Score", sortFunc: sortNumber}
         ]
         const embed = tableCreator(new EmbedBuilder(),[],rows,headers)
         event.reply({embeds: [embed]})

@@ -21,7 +21,7 @@ export async function playerProfileCreator(user: User): Promise<EmbedBuilder> {
     // Add stats
     if (stats) {
         // Calculate averages from available fields
-        const avgPlacement = stats.rank_average;
+        const avgPlacement = stats.rank_total / stats.game_total;
         const adjAvg = stats.game_total > 0 ? (stats.score_adj_total / stats.game_total) : 0;
         const rawAvg = stats.game_total > 0 ? (stats.score_raw_total / stats.game_total) : 0;
         embed.addFields(

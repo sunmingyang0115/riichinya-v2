@@ -40,7 +40,7 @@ export type PlayerProfile = {
 	score_adj_average: number;
 	score_raw_total: number;
 	score_raw_average: number;
-	rank_average: number;
+	rank_total: number;
 	game_total: number;
 };
 
@@ -351,8 +351,8 @@ export class RiichiDatabase {
             score_adj_total / 1000.0 / game_total AS score_adj_average,
             score_raw_total / 1000.0 AS score_raw_total,
             score_raw_total / 1000.0 / game_total AS score_raw_average,
-            rank_total / game_total AS rank_average,
-            game_total
+            rank_total,
+            game_total 
             FROM DataPlayer
             WHERE id_player = ?`,
 			id
