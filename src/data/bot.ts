@@ -10,6 +10,7 @@ import { RiichiDbCommand } from "../cmds/riichidb.js";
 import { InteractionHandler } from "../events/interaction_handler.js";
 import { MjsCommand } from "../cmds/mjs.js";
 import { WwydCommand } from "../cmds/wwyd.js";
+import { TableCommand } from "../cmds/table.js";
 
 export class Bot {
     private token: string | undefined;
@@ -22,7 +23,8 @@ export class Bot {
             new TestCommand(),
             new MjsCommand(),
             new WwydCommand(),
-            new RiichiDbCommand()
+            new RiichiDbCommand(),
+            new TableCommand()
         ];
         let events : EventBuilder[] = [
             new ClientReadyHandler(),
