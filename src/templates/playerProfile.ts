@@ -1,19 +1,44 @@
 import { RiichiDatabase } from "../cmds/riichidb/sql_db";
 import { EmbedBuilder, User } from "discord.js";
 import { table } from "table";
+import { generateCombinedSvg } from "../cmds/mjs/charts"
+import { Result } from "../cmds/mjs/common";
+import sharp from "sharp";
 
-export async function playerProfileCreator(user: User): Promise<EmbedBuilder> {
+export async function playerProfileCreator(user: User): Promise<[EmbedBuilder,{ attachment: string; name: string }[]]> {
     // Fetch player data
-    const statsArr = await RiichiDatabase.getPlayerProfile(user.id);
-    const games = await RiichiDatabase.getPlayerResults(user.id);
+    const [rank, statsArr, games] = await Promise.all([
+        RiichiDatabase.getPlayerRank(user.id),
+        RiichiDatabase.getPlayerProfile(user.id),
+        RiichiDatabase.getPlayerResults(user.id)
+    ]);
+    //need to subtract 1 because Result uses 0-index
+    const rankResults = games.map(g => g.rank - 1 as Result);
+    const counts = [0, 1, 2, 3].map(n => rankResults.filter(x => x === n).length);
+    
     const opponentStats = await RiichiDatabase.getOpponentDelta(user.id);
+    const percentages = counts.map(count => count / rankResults.length);
 
+    const svg = generateCombinedSvg(rankResults, percentages)
+
+    const imgName = `${user.id}-img.png`;
+    const imgPath = `tmp/${imgName}`;
+
+    await sharp(Buffer.from(svg)).toFile(imgPath);
     const stats = statsArr[0];
     const embed = new EmbedBuilder()
         .setTitle(`${user.username}'s Mahjong Profile`)
         .setThumbnail(user.displayAvatarURL())
         .setColor(0x00bfff)
         .setFooter({ text: `ID: ${user.id}` });
+
+    embed.setImage(`attachment://${imgName}`);
+
+    const files = [{
+        attachment: imgPath,
+        name: imgName,
+    }]
+
     const formatAdj = (adj: number) => {
         const val = adj.toFixed(1);
         return adj > 0 ? `+${val}` : val;
@@ -25,10 +50,12 @@ export async function playerProfileCreator(user: User): Promise<EmbedBuilder> {
         const adjAvg = stats.game_total > 0 ? (stats.score_adj_total / stats.game_total) : 0;
         const rawAvg = stats.game_total > 0 ? (stats.score_raw_total / stats.game_total) : 0;
         embed.addFields(
-            { name: "Total Games", value: `${stats.game_total}`, inline: true },
+            { name: "Rank", value: `${rank[0].rank}`, inline: true},
             { name: "Avg. Placement", value: `${avgPlacement.toFixed(1)}`, inline: true },
+            { name: "Total Games", value: `${stats.game_total}`, inline: true },
+            { name: "\t", value: "\t"},
             { name: "Adj. Score (Avg)", value: `${adjAvg.toFixed(1)}`, inline: true },
-            { name: "Raw Score (Avg)", value: `${rawAvg.toFixed(1)}`, inline: true }
+            { name: "Raw Score (Avg)", value: `${(rawAvg * 1000).toFixed(0)}`, inline: true }
         );
     } else {
         embed.setDescription("No stats found for this player.");
@@ -38,10 +65,15 @@ export async function playerProfileCreator(user: User): Promise<EmbedBuilder> {
         const tableData = [
             ["Rank", "Adj", "Raw", "Date"],
             ...games.slice(0, 5).map(g => [
-                String(g.rank),
-                formatAdj(g.adj/1000),
-                g.raw,
-                new Date(Number(g.time)).toLocaleDateString()
+            String(g.rank),
+            formatAdj(g.adj / 1000),
+            g.raw,
+            (() => {
+                const d = new Date(Number(g.time));
+                const month = d.getMonth() + 1;
+                const monthStr = month < 10 ? `0${month}` : `${month}`;
+                return `${monthStr}/${d.getDate()}`;
+            })()
             ])
         ];
         const historyTable = table(tableData, {
@@ -58,26 +90,18 @@ ${historyTable}${'```'}`, inline: false });
         arr.sort((a, b) => b[1].adj - a[1].adj);
         const worst = arr[0];
         const best = arr[arr.length - 1];
-        
-
-        if (worst && worst !== best) {
-            embed.addFields({
+        embed.addFields({
             name: "Tile Feeder",
             value: `<@${worst[0]}>\n **${formatAdj(worst[1].adj / 1000)}** (Adj) over ${worst[1].games} game(s)`,
             inline: true
-            });
-        }
-        if (best) {
-            embed.addFields({
+            },
+            {
             name: "Challenging Matchup",
             value: `<@${best[0]}>\n **${formatAdj(best[1].adj / 1000)}** (Adj) over ${best[1].games} game(s)`,
             inline: true
-            });
-        }
-        
-        
+        });
     }
 
-    return embed;
+    return [embed,files];
 }
 

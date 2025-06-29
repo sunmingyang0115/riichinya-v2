@@ -134,8 +134,8 @@ export class RiichiDbCommand implements CommandBuilder {
             }
         } else if (args[0] === 'me') {
             // Show the profile of the user who invoked the command
-            const embed = await playerProfileCreator(event.author);
-            event.reply({ embeds: [embed] });
+            const [embed, files] = await playerProfileCreator(event.author);
+            event.reply({ embeds: [embed], files: files });
         } else if (args[0] === 'player') {
             const id = args[1].replace(/<@|>/g, "")
             // check if provided id is comprised of numbers
@@ -148,8 +148,8 @@ export class RiichiDbCommand implements CommandBuilder {
             if (!user) {
                 throw Error("User not found");
             }
-            const embed = await playerProfileCreator(user);
-            event.reply({ embeds: [embed] });
+            const [embed, files] = await playerProfileCreator(user);
+            event.reply({ embeds: [embed], files: files });
         } else if (args[0] === 'game') {
             if (!/^\d+$/.test(args[2])) {
                 throw Error("invalid player id");

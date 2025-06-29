@@ -342,6 +342,18 @@ export class RiichiDatabase {
 		return opponentStats;
 	}
 
+	static async getPlayerRank(id: string): Promise<[{rank: number}]> {
+		if (this.db == null) await this.init();
+		return await this.db!.all(`
+			SELECT rank FROM (
+			SELECT
+				id_player,
+				RANK() OVER (ORDER BY score_adj_total * 1.0 / game_total DESC) AS rank
+			FROM DataPlayer
+			)
+			WHERE id_player = ?`, id);
+	}
+
 	static async getPlayerProfile(id: string): Promise<PlayerProfile[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
@@ -357,6 +369,23 @@ export class RiichiDatabase {
             WHERE id_player = ?`,
 			id
 		);
+	}
+
+	static async getPlayerRankByAdjAverage(id: string): Promise<number | null> {
+		if (this.db == null) await this.init();
+		const all = await this.db!.all(`
+			SELECT id_player, score_adj_total * 1.0 / game_total AS score_adj_average
+			FROM DataPlayer
+			ORDER BY score_adj_average DESC
+		`);
+		const rank = all.findIndex((row: any) => row.id_player === id);
+		return rank !== -1 ? rank + 1 : null;
+	}
+
+	static async getPlayerProfileWithRank(id: string): Promise<(PlayerProfile & { rank_adj_average: number | null })[]> {
+		const profile = await this.getPlayerProfile(id);
+		const rank = await this.getPlayerRankByAdjAverage(id);
+		return profile.map(p => ({ ...p, rank_adj_average: rank }));
 	}
 
 	static async getGameProfile(id: string): Promise<DataGameSQLEntry[]> {
