@@ -13,7 +13,7 @@ export async function playerProfileCreator(user: User): Promise<[EmbedBuilder,{ 
         RiichiDatabase.getPlayerResults(user.id)
     ]);
     //need to subtract 1 because Result uses 0-index
-    const rankResults = games.map(g => g.rank - 1 as Result);
+    const rankResults = games.map(g => g.rank - 1 as Result).reverse();
     const counts = [0, 1, 2, 3].map(n => rankResults.filter(x => x === n).length);
     
     const opponentStats = await RiichiDatabase.getOpponentDelta(user.id);

@@ -3,7 +3,7 @@ import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
 import { DataGameSQLEntry, DataPlayerSQLEntry, RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
-import { EmbedManager } from "../data/embed_manager";
+import { EmbedManager, Header } from "../data/embed_manager";
 import { parse } from "json2csv";
 import { playerProfileCreator } from "../templates/playerProfile";
 
@@ -78,34 +78,9 @@ export class RiichiDbCommand implements CommandBuilder {
         //TODO: Handle large amounts of players (don't think it will matter for now)
         // Manually changing headers is a bit of a hack, should change EmbedManager directly
         // Will do when I feel like it
-        let reply = (tbl: any[], header: string) => {
-            const eb = new EmbedManager("Season Leaderboard", event.client);
-            for (let i=0;i<tbl.length;i++) {
-                tbl[i].Rank = i + 1;
-                const rankObject = {"Rank": null};
-                //trustttt
-                tbl[i] = Object.assign(rankObject, tbl[i])
-            }
-
-            // map doesn't work for some reason
-            // tbl.forEach((obj, index) => {
-            //     obj.Rank = index + 1;
-            // })
-            // tbl.map((obj) => {
-            //     const rankObject = {"Rank": null};
-            //     return Object.assign(rankObject, obj);
-            // })
-
-            eb.addObjectArrayToField(tbl)
-            if (eb.data.fields) {
-                eb.data.fields[1].name = "Player";
-                eb.data.fields[2].name = header;
-            }
-            event.reply({ embeds: [eb] });
-        };
 
         if (args.length === 0) {
-            reply(await RiichiDatabase.getLBScore(1000), "Score (Adjusted)");
+            args = ["list","sat"]
         }
 
         if (args[0] === 'init') {
@@ -113,24 +88,38 @@ export class RiichiDbCommand implements CommandBuilder {
         } else if (args[0] === 'insert') {
             // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
         } else if (args[0] === 'list') {
-            let amount = 10;
+            let amount = 100;
             if (args[2] !== undefined && !Number.isNaN(args[2])) {
                 amount = Number(args[2]);
             }
+            
+            let headers: Header[] = [{k: "rank", l: "Rank", t: "number"}, {k: "id_player", l: "Player", t: "mention"}]
+            let data = null;
             if (args[1] === 'rank_average' || args[1] === 'ra') {
-                reply(await RiichiDatabase.getLBAveragePlacement(amount), "Average Rank");
+                data = await RiichiDatabase.getLBAveragePlacement(amount);
+                headers.push({ k: "average_rank", l: "Average Rank", t: "number" });
             } else if (args[1] === 'score_adj_total' || args[1] === 'sat') {
-                reply(await RiichiDatabase.getLBScore(amount), "Score (Adjusted)");
+                data = await RiichiDatabase.getLBScore(amount);
+                headers.push({ k: "score_adj_total", l: "Score (Adjusted)", t: "score" });
             } else if (args[1] === 'score_raw_total' || args[1] === 'srt') {
-                reply(await RiichiDatabase.getLBScoreRaw(amount), "Score (Raw)");
+                data = await RiichiDatabase.getLBScoreRaw(amount);
+                headers.push({ k: "score_raw_total", l: "Score (Raw)", t: "score" });
             } else if (args[1] === 'score_adj_average' || args[1] === 'saa') {
-                reply(await RiichiDatabase.getLBAverageScore(amount), "Score (Adjusted Average)");
+                data = await RiichiDatabase.getLBAverageScore(amount);
+                headers.push({ k: "score_adj_average", l: "Score (Adjusted Average)", t: "score" });
             } else if (args[1] === 'score_raw_average' || args[1] === 'sra') {
-                reply(await RiichiDatabase.getLBAverageScoreRaw(amount), "Score (Raw Average)");
+                data = await RiichiDatabase.getLBAverageScoreRaw(amount);
+                headers.push({ k: "score_raw_average", l: "Score (Raw Average)", t: "score" });
             } else if (args[1] === 'game_total' || args[1] === 'gt') {
-                reply(await RiichiDatabase.getLBGamesPlayed(amount), "Games Played (Total)");
-            } else if (args[1] === 'game_recent' || args[1] === 'gr') {
-                reply(await RiichiDatabase.getLBRecentGames(amount), "Recent Games Played");
+                data = await RiichiDatabase.getLBGamesPlayed(amount);
+                headers.push({ k: "game_total", l: "Games Played (Total)", t: "number" });
+            }
+            if (data) {
+                data.forEach((p,i) => p.rank = i+1);
+
+                const eb = new EmbedManager("Season Leaderboard", event.client);
+                eb.addObjectArrayToField(headers,data);
+                event.reply({ embeds: [eb] });
             }
         } else if (args[0] === 'me') {
             // Show the profile of the user who invoked the command
@@ -154,7 +143,7 @@ export class RiichiDbCommand implements CommandBuilder {
             if (!/^\d+$/.test(args[2])) {
                 throw Error("invalid player id");
             }
-            reply(await RiichiDatabase.getGameProfile(args[2]), "Date");
+            //reply(await RiichiDatabase.getGameProfile(args[2]), "Date");
         } else if (args[0] === 'csv') {
             const data = await RiichiDatabase.getEntireDB();
             // gpt code 

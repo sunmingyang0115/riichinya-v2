@@ -174,7 +174,7 @@ export class RiichiDatabase {
 		);
 	}
 
-	static async getLBAveragePlacement(n: number): Promise<object[]> {
+	static async getLBAveragePlacement(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -186,7 +186,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBScore(n: number): Promise<object[]> {
+	static async getLBScore(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -198,7 +198,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBScoreRaw(n: number): Promise<object[]> {
+	static async getLBScoreRaw(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -210,7 +210,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBAverageScore(n: number): Promise<object[]> {
+	static async getLBAverageScore(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -222,7 +222,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBAverageScoreRaw(n: number): Promise<object[]> {
+	static async getLBAverageScoreRaw(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -234,7 +234,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBGamesPlayed(n: number): Promise<object[]> {
+	static async getLBGamesPlayed(n: number): Promise<Record<string, any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`
@@ -246,7 +246,7 @@ export class RiichiDatabase {
 			n
 		);
 	}
-	static async getLBRecentGames(n: number): Promise<object[]> {
+	static async getLBRecentGames(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
 		return await this.db!.all(
 			`

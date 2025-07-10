@@ -31,7 +31,6 @@ export const sortNumber = (a: any, b: any): number => {
  * @param rows the data to use. 
  * @param headers
  * @param toSplit if the data possibly contains non-latin characters, put it on the left side and split the table.
- * @returns 
  */
 export const tableCreator = (
   embed: EmbedBuilder,
