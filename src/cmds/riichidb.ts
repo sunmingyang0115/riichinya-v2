@@ -12,9 +12,7 @@ export class RiichiDbCommand implements CommandBuilder {
         return new DocBuilder()
             .addSingleSubCom("ron", ExpectedType.LITERAL, "")
             .addSingleSubCom("rdb", ExpectedType.LITERAL, "")
-            .beginMultiSubCom("list")
-            .insertMultiSubCom(ExpectedType.LITERAL, "lists rows of data based on folllowing subcategories")
-
+            
             .beginMultiSubCom("ra")
             .insertMultiSubCom(ExpectedType.LITERAL, "by rank average")
             .back()
@@ -39,10 +37,8 @@ export class RiichiDbCommand implements CommandBuilder {
             .insertMultiSubCom(ExpectedType.LITERAL, "by games played as total")
             .back()
 
-            .beginMultiSubCom("gr")
-            .insertMultiSubCom(ExpectedType.LITERAL, "by recent games1")
-            .back()
-
+            .beginMultiSubCom("m")
+            .insertMultiSubCom(ExpectedType.LITERAL, "formats the embed for mobile devices")
             .back()
 
             .beginMultiSubCom("player")
