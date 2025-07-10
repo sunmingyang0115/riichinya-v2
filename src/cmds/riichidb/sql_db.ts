@@ -50,6 +50,29 @@ export type GameInfo = {
 	scoreAdj: number[];
 };
 
+
+
+export type playerDataAttr = "rank_average" | "score_adj_average" | "score_raw_average" | "score_adj_total" | "score_raw_total" | "rank_total" | "game_total";
+const prompts = {
+	"rank_average": "rank_total * 1.0 / game_total AS rank_average",
+	"score_adj_average": "score_adj_total / game_total / 1000.0 AS score_adj_average",
+	"score_raw_average": "score_raw_total / game_total / 1000.0 AS score_raw_average",
+	"score_adj_total": "score_adj_total / 1000.0 AS score_adj_total",
+	"score_raw_total": "score_raw_total / 1000.0 AS score_raw_total",
+	"rank_total": "rank_total",
+	"game_total": "game_total"
+};
+const order = {
+	"rank_average": "rank_average ASC",
+	"score_adj_average": "score_adj_average DESC",
+	"score_raw_average": "score_raw_average DESC",
+	"score_adj_total": "score_adj_total DESC",
+	"score_raw_total": "score_raw_total DESC",
+	"rank_total": "rank_total DESC",
+	"game_total": "game_total DESC"
+}
+
+
 export class RiichiDatabase {
 	private static db: Database | null = null;
 	/**
@@ -174,77 +197,25 @@ export class RiichiDatabase {
 		);
 	}
 
-	static async getLBAveragePlacement(n: number): Promise<Record<string,any>[]> {
+	
+	static async getPlayerData(n: number, attr: playerDataAttr[]): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();
-		return await this.db!.all(
-			`
-            SELECT id_player,
-            rank_total * 1.0 / game_total AS rank_average
+		console.log(attr);
+		console.log(`
+			SELECT id_player,
+            ${attr.map(a => prompts[a]).join(", ")}
             FROM DataPlayer
             ORDER BY rank_average ASC
-            LIMIT ?`,
-			n
-		);
-	}
-	static async getLBScore(n: number): Promise<Record<string,any>[]> {
-		if (this.db == null) await this.init();
+            LIMIT ?`)
 		return await this.db!.all(
 			`
-            SELECT id_player,
-            score_adj_total / 1000.0 AS score_adj_total
+			SELECT id_player,
+            ${attr.map(a => prompts[a]).join(", ")}
             FROM DataPlayer
-            ORDER BY score_adj_total DESC
+            ORDER BY ${order[attr[0]]}
             LIMIT ?`,
 			n
-		);
-	}
-	static async getLBScoreRaw(n: number): Promise<Record<string,any>[]> {
-		if (this.db == null) await this.init();
-		return await this.db!.all(
-			`
-            SELECT id_player,
-            score_raw_total / 1000.0 AS score_raw_total
-            FROM DataPlayer
-            ORDER BY score_raw_total DESC
-            LIMIT ?`,
-			n
-		);
-	}
-	static async getLBAverageScore(n: number): Promise<Record<string,any>[]> {
-		if (this.db == null) await this.init();
-		return await this.db!.all(
-			`
-            SELECT id_player,
-            score_adj_total / game_total / 1000.0 AS score_adj_average
-            FROM DataPlayer
-            ORDER BY score_adj_average DESC
-            LIMIT ?`,
-			n
-		);
-	}
-	static async getLBAverageScoreRaw(n: number): Promise<Record<string,any>[]> {
-		if (this.db == null) await this.init();
-		return await this.db!.all(
-			`
-            SELECT id_player,
-            score_raw_total / game_total / 1000.0 AS score_raw_average
-            FROM DataPlayer
-            ORDER BY score_raw_average DESC
-            LIMIT ?`,
-			n
-		);
-	}
-	static async getLBGamesPlayed(n: number): Promise<Record<string, any>[]> {
-		if (this.db == null) await this.init();
-		return await this.db!.all(
-			`
-            SELECT id_player,
-            game_total
-            FROM DataPlayer
-            ORDER BY game_total DESC
-            LIMIT ?`,
-			n
-		);
+		)
 	}
 	static async getLBRecentGames(n: number): Promise<Record<string,any>[]> {
 		if (this.db == null) await this.init();

@@ -28,6 +28,31 @@ export class EmbedManager extends EmbedBuilder {
         return this.setDescription(content);
     }
 
+    public addObjectArrayToMobile(headers: Header[], ob : Record<string, any>[]): this {
+        if (ob.length == 0) return this;
+        if (headers.length != Object.keys(ob[0]).length) {
+            console.log(headers, ob[0])
+            return this;
+        }
+        //Check if every header key exists in each ob
+        for (const header of headers) {
+            if (!ob.every(o => o.hasOwnProperty(header.k))) {
+                console.error(`Header key ${header.k} does not exist in all objects.`);
+                return this;
+            }
+        }
+
+        let out = headers.map(h => h.l).join(' | ') + '\n';
+        //add each row of data
+        for (var row = 0; row < ob.length; row++) {
+            let rowData = headers.map(h => this.format(ob[row][h.k], h.t)).join(' | ');
+            out += rowData + '\n';
+        }
+
+        this.setDescription(out);
+        return this;
+    }
+
     public addObjectArrayToField(headers: Header[], ob : Record<string, any>[]) : this {
         if (ob.length == 0) return this;
         if (headers.length != Object.keys(ob[0]).length) {

@@ -1,7 +1,7 @@
 import { Message, Client, AttachmentBuilder, Collection } from "discord.js";
 import { CommandBuilder } from "../data/cmd_manager";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
-import { DataGameSQLEntry, DataPlayerSQLEntry, RiichiDatabase } from "./riichidb/sql_db";
+import { DataGameSQLEntry, DataPlayerSQLEntry, playerDataAttr, RiichiDatabase } from "./riichidb/sql_db";
 import { parseScoreFromRaw } from "./riichidb/score_parser";
 import { EmbedManager, Header } from "../data/embed_manager";
 import { parse } from "json2csv";
@@ -76,8 +76,6 @@ export class RiichiDbCommand implements CommandBuilder {
     async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
 
         //TODO: Handle large amounts of players (don't think it will matter for now)
-        // Manually changing headers is a bit of a hack, should change EmbedManager directly
-        // Will do when I feel like it
 
         if (args.length === 0) {
             args = ["list","sat"]
@@ -86,39 +84,61 @@ export class RiichiDbCommand implements CommandBuilder {
         if (args[0] === 'init') {
             RiichiDatabase.init();
         } else if (args[0] === 'insert') {
-            // await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
+            //await RiichiDatabase.insertData(event.id, parseScoreFromRaw(args.slice(1)));
         } else if (args[0] === 'list') {
             let amount = 100;
-            if (args[2] !== undefined && !Number.isNaN(args[2])) {
-                amount = Number(args[2]);
+            
+            let headers: Header[] = []
+            let data = null;
+            let mobile = false;
+
+            const acronyms: Record<string, playerDataAttr> = {
+                "ra": "rank_average",
+                "sat": "score_adj_total",
+                "srt": "score_raw_total",
+                "saa": "score_adj_average",
+                "sra": "score_raw_average",
+                "gt": "game_total"
+            }
+
+            const headerData: Record<playerDataAttr, Header> = {
+                "rank_average": {k: "", l: "Average Rank", t: "number" },
+                "score_adj_total": {k: "", l: "Score (Adjusted)", t: "score" },
+                "score_raw_total": {k: "", l: "Score (Raw)", t: "score" },
+                "score_adj_average": {k: "", l: "Score (Adjusted Average)", t: "score" },
+                "score_raw_average": {k: "", l: "Score (Raw Average)", t: "score" },
+                "game_total": {k: "", l: "Games Played (Total)", t: "number" },
+                "rank_total": {k: "", l: "Rank Total", t: "number" }
+            }
+
+            for (let i = 1; i < args.length; i++) {
+                if (args[i] === 'm') {
+                    mobile = true;
+                } else if (!isNaN(Number(args[i])) && Number.isInteger(Number(args[i]))) {
+                    amount = Number(args[i]);
+                } else if (args[i] in acronyms) {
+                    const key = acronyms[args[i]];
+                    headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+                } else if (args[i] in headerData) {
+                    const key = args[i] as playerDataAttr;
+                    headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+                }
+                data = await RiichiDatabase.getPlayerData(amount, headers.map(h => h.k) as playerDataAttr[]);
             }
             
-            let headers: Header[] = [{k: "rank", l: "Rank", t: "number"}, {k: "id_player", l: "Player", t: "mention"}]
-            let data = null;
-            if (args[1] === 'rank_average' || args[1] === 'ra') {
-                data = await RiichiDatabase.getLBAveragePlacement(amount);
-                headers.push({ k: "average_rank", l: "Average Rank", t: "number" });
-            } else if (args[1] === 'score_adj_total' || args[1] === 'sat') {
-                data = await RiichiDatabase.getLBScore(amount);
-                headers.push({ k: "score_adj_total", l: "Score (Adjusted)", t: "score" });
-            } else if (args[1] === 'score_raw_total' || args[1] === 'srt') {
-                data = await RiichiDatabase.getLBScoreRaw(amount);
-                headers.push({ k: "score_raw_total", l: "Score (Raw)", t: "score" });
-            } else if (args[1] === 'score_adj_average' || args[1] === 'saa') {
-                data = await RiichiDatabase.getLBAverageScore(amount);
-                headers.push({ k: "score_adj_average", l: "Score (Adjusted Average)", t: "score" });
-            } else if (args[1] === 'score_raw_average' || args[1] === 'sra') {
-                data = await RiichiDatabase.getLBAverageScoreRaw(amount);
-                headers.push({ k: "score_raw_average", l: "Score (Raw Average)", t: "score" });
-            } else if (args[1] === 'game_total' || args[1] === 'gt') {
-                data = await RiichiDatabase.getLBGamesPlayed(amount);
-                headers.push({ k: "game_total", l: "Games Played (Total)", t: "number" });
-            }
             if (data) {
+                //Add rank and player headers:
+                //Idk why it doesn't let me do it in one line
+                headers.unshift({k: "id_player", l: "Player", t: "mention"});
+                headers.unshift({k: "rank", l: "Rank", t: "number"});
                 data.forEach((p,i) => p.rank = i+1);
 
                 const eb = new EmbedManager("Season Leaderboard", event.client);
-                eb.addObjectArrayToField(headers,data);
+                if (mobile) {
+                    eb.addObjectArrayToMobile(headers, data);
+                } else {
+                    eb.addObjectArrayToField(headers, data);
+                }
                 event.reply({ embeds: [eb] });
             }
         } else if (args[0] === 'me') {
