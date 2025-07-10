@@ -201,8 +201,9 @@ export class RiichiDbCommand implements CommandBuilder {
                     const key = args[i] as playerDataAttr;
                     headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
                 }
-                data = await RiichiDatabase.getPlayerData(amount, headers.map(h => h.k) as playerDataAttr[]);
+                
             }
+            data = await RiichiDatabase.getPlayerData(amount, headers.map(h => h.k) as playerDataAttr[]);
             
             if (data) {
                 //Add rank and player headers:
