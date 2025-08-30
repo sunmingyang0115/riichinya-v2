@@ -319,7 +319,7 @@ export class RiichiDatabase {
 			SELECT rank FROM (
 			SELECT
 				id_player,
-				RANK() OVER (ORDER BY score_adj_total * 1.0 / game_total DESC) AS rank
+				RANK() OVER (ORDER BY score_adj_total * 1.0 DESC) AS rank
 			FROM DataPlayer
 			)
 			WHERE id_player = ?`, id);
