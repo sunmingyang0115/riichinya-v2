@@ -2,6 +2,15 @@ import { EmbedBuilder, Client } from "discord.js";
 import { CommandBuilder } from "./cmd_manager";
 import { MJS_ERROR_TYPE } from "../cmds/mjs/common";
 
+export type Header = {
+    /** key: the property name in the data object */
+    k: string 
+    /** label: the column header to display */
+    l: string
+    /** type: the formatting type (e.g., "mention", "date", "score") */
+    t: string
+};
+
 export class EmbedManager extends EmbedBuilder {
     constructor (commandname : string, profile : Client) {
         super()
@@ -19,39 +28,66 @@ export class EmbedManager extends EmbedBuilder {
         return this.setDescription(content);
     }
 
-    public addObjectArrayToField(ob : object[]) : this {
+    public addObjectArrayToMobile(headers: Header[], ob : Record<string, any>[]): this {
         if (ob.length == 0) return this;
+        if (headers.length != Object.keys(ob[0]).length) {
+            console.log(headers, ob[0])
+            return this;
+        }
+        //Check if every header key exists in each ob
+        for (const header of headers) {
+            if (!ob.every(o => o.hasOwnProperty(header.k))) {
+                console.error(`Header key ${header.k} does not exist in all objects.`);
+                return this;
+            }
+        }
 
-        let labels = Object.keys(ob[0]);
-        let cols = Object.values(ob[0]).length;
+        let out = headers.map(h => h.l).join(' | ') + '\n';
+        //add each row of data
+        for (var row = 0; row < ob.length; row++) {
+            let rowData = headers.map(h => this.format(ob[row][h.k], h.t)).join(' | ');
+            out += rowData + '\n';
+        }
 
-        for (var col = 0; col < cols; col++) {
-            let label = labels[col];
+        this.setDescription(out);
+        return this;
+    }
+
+    public addObjectArrayToField(headers: Header[], ob : Record<string, any>[]) : this {
+        if (ob.length == 0) return this;
+        if (headers.length != Object.keys(ob[0]).length) {
+            console.log(headers, ob[0])
+            return this;
+        }
+        //Check if every header key exists in each ob
+        for (const header of headers) {
+            if (!ob.every(o => o.hasOwnProperty(header.k))) {
+                console.error(`Header key ${header.k} does not exist in all objects.`);
+                return this;
+            }
+        }
+
+        for (var col = 0; col < headers.length; col++) {
+            const header = headers[col];
             let out : unknown[] = [];
             for (var row = 0; row < ob.length; row++) {
-                out.push(this.format(Object.values(ob[row])[col], label));
+                out.push(this.format(ob[row][header.k], header.t));
             }
-            this.addFields({name: label, value : out.join('\n'), inline: true});
+            this.addFields({name: header.l, value : out.join('\n'), inline: true});
         }
         return this;
     }
 
     // worst code in the entire codebase
-    private format(t : object, label : string) : any {
-        if (label.startsWith("id_player")) {
+    private format(t : any, type: string) : any {
+        if (type === "mention") {
             // console.log(`<@${t}>`)  
             return `<@${t}>`;
-        } else if (label.startsWith("date")) {
-            let date = new Date(Number(`${t}`));
-            let year = date.getFullYear();
-            let month = String(date.getMonth() + 1).padStart(2, '0');
-            let day = String(date.getDate()).padStart(2, '0');
-            let hours = String(date.getHours()).padStart(2, '0');
-            let minutes = String(date.getMinutes()).padStart(2, '0');
-            let seconds = String(date.getSeconds()).padStart(2, '0');
-            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-        } else if (label.startsWith("score")) {
-            return Number(`${t}`).toFixed(1);
+        } else if (type === "date") {
+            const date = new Date(t);
+            return date.toDateString();
+        } else if (type === "score") {
+            return Number(t).toFixed(1);
         }
         return t;
     }
