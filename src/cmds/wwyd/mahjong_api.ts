@@ -65,6 +65,7 @@ export interface MahjongAnalysisResponse {
 			num_tiles: number;
 		};
 	};
+    err_msg?: string,
 }
 
 /**
@@ -116,13 +117,17 @@ function generateWall(tiles: number[]): number[] {
 	const wall = new Array(37).fill(4);
 	//red five separation
 	wall[34] = wall[35] = wall[36] = 1;
-    // for some reason pystyle combines red & normal 5 for the regular 5 count
+    // the regular 5 counts are used as the total 5 counts
 
 	// Subtract used tiles
 	for (const tile of tiles) {
 		if (tile < wall.length && wall[tile] > 0) {
 			wall[tile]--;
 		}
+        //if red fives, also subtract from regular 5
+        if (tile === 34) wall[4]--;
+        if (tile === 35) wall[13]--;
+        if (tile === 36) wall[22]--;
 	}
 
 	return wall;
@@ -237,7 +242,11 @@ function convertResponseData(response: MahjongAnalysisResponse, turn: number): W
 export async function analyzeWWYDSituation(wwyd: Wwyd): Promise<WwydAnalysisResult[]> {
 	const apiData = convertWwydToApiFormat(wwyd);
 	const response = await getMahjongAnalysis(apiData);
-    console.log(response);
+    if (response.success === true) {
+        return convertResponseData(response, parseInt(wwyd.turn));
+    } else {
+        throw new Error(response.err_msg);
+    }
 
-	return convertResponseData(response, parseInt(wwyd.turn));
+	
 }

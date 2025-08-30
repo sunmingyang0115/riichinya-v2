@@ -349,11 +349,18 @@ export const prepareWwydEmbed = async (
   await sharp(await generateWwydComposite(wwyd)).toFile(outFilePath);
   embed.setImage(`attachment://${outFileName}`);
 
-  const analysis = await analyzeWWYDSituation(wwyd);
-  analysisEmbed.addFields({
-    name: "Pystyle Analysis",
-    value: formatAnalysisCompact(analysis),
-  });
+  try {
+    const analysis = await analyzeWWYDSituation(wwyd);
+    analysisEmbed.addFields({
+      name: "Pystyle Analysis",
+      value: formatAnalysisCompact(analysis),
+    });
+  } catch (error) {
+    console.error("Error analyzing WWYD situation:", error);
+    analysisEmbed.setTitle("Error analyzing WWYD situation");
+    analysisEmbed.setDescription(String(error));
+  }
+  
 
   analysisEmbed.setFooter({ text: "Note: Pystyle is purely a self-draw simulator: It does not account for defense, calls, riichi, and other variables." });
   return [
