@@ -201,8 +201,14 @@ export class RiichiDbCommand implements CommandBuilder {
                     const key = args[i] as playerDataAttr;
                     headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
                 }
-                
             }
+
+            // set a default value to sat
+            if (headers.length === 0) {
+                const key = acronyms['sat'];
+                headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+            }
+
             data = await RiichiDatabase.getPlayerData(amount, headers.map(h => h.k) as playerDataAttr[]);
             
             if (data) {
