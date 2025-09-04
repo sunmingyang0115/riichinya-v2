@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import BotProperties from "../../bot_properties.json";
 import dayjs from "dayjs";
 import sharp from "sharp";
+import { analyzeWWYDSituation, WwydAnalysisResult } from "./wwyd/mahjong_api";
 
 export type GuildChannelMap = {
   [guildId: string]: string;
@@ -113,15 +114,15 @@ export class WwydCommand implements CommandBuilder {
         });
       }
       eb.addContent(`Disabled sending daily WWYD's.`);
-    } else if (args[0] === "today") {
-      const files = await prepareWwydEmbed(eb);
-      event.reply({ embeds: [eb], files: files });
-    } else if (args[0] === "random") {
-      const files = await prepareWwydEmbed(eb, false);
-      event.reply({ embeds: [eb], files: files });
+    } else if (args[0] === "today" || args[0] === "random") {
+      const analysisEmbed = new EmbedBuilder();
+      const files = await prepareWwydEmbed(eb, analysisEmbed, args[0] === "today");
+      event.reply({ embeds: [eb, analysisEmbed], files: files });
     }
   }
 }
+
+
 
 /**
  * Generate an image to represent the WWYD problem.
@@ -218,32 +219,84 @@ const generateWwydComposite = async (wwyd: Wwyd): Promise<Buffer> => {
 
 /**
  * E.g. Transforms ["5p", "6p", "7p", "2s"] into "567p2s"
+ * If 4+ in a row, adds a dash (like "1-5s")
  *
  * @param tiles array of tiles in standard notation
  * @returns String of tiles in standard notation
  */
 const compressNotation = (tiles: string[]): string => {
-  const map = {
-    m: "",
-    p: "",
-    s: "",
-    z: "",
-  };
-  tiles.forEach((tile) => {
-    map[tile[1] as "m" | "p" | "s" | "z"] += tile[0];
-  });
-
-  let str = "";
-
-  Object.entries(map).forEach(([suit, values]) => {
-    if (!values) {
-      return;
-    }
-    str += values + suit;
-  });
-
-  return str;
+  const map: Record<string, string> = { m: "", p: "", s: "", z: "" };
+  tiles.forEach(tile => map[tile[1]] += tile[0]);
+  
+  return Object.entries(map)
+    .filter(([, values]) => values)
+    .map(([suit, values]) => {
+      if (values.length < 4) {
+        return values + suit;
+      }
+      
+      // Sort the numbers and find consecutive sequences
+      const nums = values.split('').map(Number).sort((a, b) => a - b);
+      const result: string[] = [];
+      let start = 0;
+      
+      for (let i = 1; i <= nums.length; i++) {
+        // End of sequence or end of array
+        if (i === nums.length || nums[i] !== nums[i-1] + 1) {
+          const sequenceLength = i - start;
+          if (sequenceLength >= 4) {
+            result.push(`${nums[start]}-${nums[i-1]}`);
+          } else {
+            result.push(nums.slice(start, i).join(''));
+          }
+          start = i;
+        }
+      }
+      
+      return result.join('') + suit;
+    })
+    .join("");
 };
+
+
+const pct = (f: number) => `${(f * 100).toFixed(2)}%`;
+const pad = (s: number | string, n: number) => s.toString().padEnd(n, " ");
+
+export function formatAnalysisCompact(rows: WwydAnalysisResult[], limit = 10): string {
+  rows.sort((a, b) => b.value - a.value);
+  const data = [...rows].slice(0, limit);
+
+  const head = "    Waits  Tiles              EV     Win%    Tenpai";
+  const lines = [head];
+
+  for (const r of data) {
+    const tile = `${r.tile}${r.back ? "*" : " "}`;
+    const waits = pad(`${r.wait_count}(${r.wait_unique})`, 6); 
+    const tiles = pad(compressNotation(r.wait_types).slice(0, 18), 18);
+    const ev = pad(r.value.toFixed(0), 6);
+    const win = pad(pct(r.winning), 7);
+    const ten = pad(pct(r.tenpai), 7);
+
+    lines.push(
+      tile + " " + waits + " " + tiles + " " + ev + " " + win + " " + ten
+    );
+  }
+
+  // Wrap in code blocks (Discord field limit 1024 chars)
+  const blocks: string[] = [];
+  let cur = "||```text\n";
+  for (const ln of lines) {
+    if (cur.length + ln.length + 4 > 1024) {
+      cur += "```";
+      blocks.push(cur);
+      cur = "```text\n";
+    }
+    cur += ln + "\n";
+  }
+  cur += "```||";
+  blocks.push(cur);
+  return blocks.join("\n")
+}
 
 /**
  * Prepare the embed for display. Image, title, fields, attachments etc.
@@ -255,6 +308,7 @@ const compressNotation = (tiles: string[]): string => {
  */
 export const prepareWwydEmbed = async (
   embed: EmbedBuilder,
+  analysisEmbed: EmbedBuilder,
   useToday = true
 ): Promise<{ attachment: string; name: string }[]> => {
   // Used as the output directory for generated images.
@@ -294,6 +348,21 @@ export const prepareWwydEmbed = async (
 
   await sharp(await generateWwydComposite(wwyd)).toFile(outFilePath);
   embed.setImage(`attachment://${outFileName}`);
+
+  try {
+    const analysis = await analyzeWWYDSituation(wwyd);
+    analysisEmbed.addFields({
+      name: "Pystyle Analysis",
+      value: formatAnalysisCompact(analysis),
+    });
+  } catch (error) {
+    console.error("Error analyzing WWYD situation:", error);
+    analysisEmbed.setTitle("Error analyzing WWYD situation");
+    analysisEmbed.setDescription(String(error));
+  }
+  
+
+  analysisEmbed.setFooter({ text: "Note: Pystyle is purely a self-draw simulator: It does not account for defense, calls, riichi, and other variables." });
   return [
     {
       attachment: outFilePath,

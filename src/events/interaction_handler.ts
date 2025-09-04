@@ -13,6 +13,7 @@ export class InteractionHandler implements EventBuilder {
     async getEventCallFunction(interaction : Interaction)  {
         if (!interaction.isMessageContextMenuCommand()) return;
         if (!BotProperties.writeAccess.includes(interaction.user.id)) return;
+        if (interaction.guildId === null || !BotProperties.activeGuilds.includes(interaction.guildId!)) return;
 
         try {
             let str = interaction.targetMessage.content;
@@ -25,8 +26,14 @@ export class InteractionHandler implements EventBuilder {
             }
             let splice = str.replace(/<@|>/g, "").split(/\s+/g);
             let content = `Successful id:${interaction.targetMessage.id!}`;
+
+            let gameid = interaction.targetMessage.id!
+
+            if (await RiichiDatabase.hasGameID(gameid)) {
+                throw new Error(`Score already exists in database.`);
+            }
         
-            await RiichiDatabase.insertData(interaction.targetMessage.id!, parseScoreFromRaw(splice));
+            await RiichiDatabase.insertData(gameid, parseScoreFromRaw(splice));
             await interaction.targetMessage.react("📥");
             await interaction.reply({
                 embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],

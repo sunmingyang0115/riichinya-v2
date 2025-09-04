@@ -17,6 +17,8 @@ export class MessageCreateHandler implements EventBuilder {
     }
     async getEventCallFunction(m: Message) {
         if (m.author.bot) return;
+        if (m.guildId === null || !BotProperties.activeGuilds.includes(m.guildId!)) return;
+
         let frag = m.content.split(/\s+/g);
         if (frag[0] == BotProperties.prefix && this.messageMap.has(frag[1])) {
             let command = this.messageMap.get(frag[1])!;

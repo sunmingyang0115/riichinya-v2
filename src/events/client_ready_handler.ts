@@ -1,6 +1,6 @@
 import { CronJob } from "cron";
 import { EventBuilder } from "../data/event_manager";
-import { Events, Client, TextChannel } from "discord.js";
+import { Events, Client, TextChannel, EmbedBuilder} from "discord.js";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { GuildChannelMap, prepareWwydEmbed } from "../cmds/wwyd";
 import { EmbedManager } from "../data/embed_manager";
@@ -22,9 +22,10 @@ export class ClientReadyHandler implements EventBuilder {
 
       Object.values(channels).forEach(async (channelId: string) => {
         const eb = new EmbedManager("wwyd", c);
-        const files = await prepareWwydEmbed(eb);
+        const analysisEmbed = new EmbedBuilder();
+        const files = await prepareWwydEmbed(eb, analysisEmbed);
         const channel = c.channels.cache.get(channelId) as TextChannel;
-        channel.send({ embeds: [eb], files: files });
+        channel.send({ embeds: [eb, analysisEmbed], files: files });
       });
     },
     null,
