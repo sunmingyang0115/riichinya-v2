@@ -8,6 +8,7 @@ package-lock.json
 yarn.lock
 bot_properties.json
 wwyd_channels.json
+wwyd_leaderboard.json
 
 # folders
 build

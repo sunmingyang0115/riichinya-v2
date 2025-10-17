@@ -2,7 +2,7 @@ import { CronJob } from "cron";
 import { EventBuilder } from "../data/event_manager";
 import { Events, Client, TextChannel, EmbedBuilder} from "discord.js";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { GuildChannelMap, prepareWwydEmbed } from "../cmds/wwyd";
+import { GuildChannelMap, prepareWwydEmbed, buildDailyWwydMessage, readLeaderboard, writeLeaderboard } from "../cmds/wwyd";
 import { EmbedManager } from "../data/embed_manager";
 
 export class ClientReadyHandler implements EventBuilder {
@@ -22,10 +22,12 @@ export class ClientReadyHandler implements EventBuilder {
 
       Object.values(channels).forEach(async (channelId: string) => {
         const eb = new EmbedManager("wwyd", c);
-        const analysisEmbed = new EmbedBuilder();
-        const files = await prepareWwydEmbed(eb, analysisEmbed);
         const channel = c.channels.cache.get(channelId) as TextChannel;
-        channel.send({ embeds: [eb, analysisEmbed], files: files });
+        if (!channel) return;
+
+        // Daily mode with buttons
+        const { embeds, files, components } = await buildDailyWwydMessage(eb);
+        await channel.send({ embeds, files, components });
       });
     },
     null,
