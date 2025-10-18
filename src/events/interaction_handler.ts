@@ -5,9 +5,9 @@ import { EmbedManager } from "../data/embed_manager";
 import { EventBuilder } from "../data/event_manager";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, Interaction, MessageFlags } from "discord.js"
 import BotProperties from "../../bot_properties.json"
-import { getTodaysWwyd, prepareWwydEmbed, readLeaderboard, writeLeaderboard } from "../cmds/wwyd";
+import { prepareWwydEmbed, WWYD_DATA_PATH, START_DATE, type GuildMap } from "../cmds/wwyd";
 import dayjs from "dayjs";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 
 export class InteractionHandler implements EventBuilder {
     getEventType(): string {
@@ -28,28 +28,46 @@ export class InteractionHandler implements EventBuilder {
             const date = parts[2];
             const tile = parts[3];
 
+            // Only allow the currently active WWYD window (10:00 -> next day's 10:00)
+            const now = dayjs();
+            const boundary = now.hour(10).minute(0).second(0).millisecond(0);
+            const activeDateStr = (now.isBefore(boundary) ? now.subtract(1, "day") : now).format("YYYY-MM-DD");
+            if (date !== activeDateStr) {
+                await interaction.deferUpdate();
+                return;
+            }
+
+            // Acknowledge quickly; we'll edit the reply after processing
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
             // Load problem for the date encoded in the button
             const wwyds = JSON.parse(readFileSync("assets/wwyd-new.json", "utf-8"));
-            const START_DATE = dayjs("2025-03-16");
             const idx = Math.max(0, Math.min(wwyds.length - 1, dayjs(date).diff(START_DATE, 'day')));
             const wwyd = wwyds[idx];
 
-            // Update leaderboard
-            const store = readLeaderboard();
-            const gid = interaction.guildId;
-            if (!store[gid]) store[gid] = {};
+            // Load and normalize the guild store once
+            const gid = interaction.guildId!;
             const uid = interaction.user.id;
-            if (!store[gid][uid]) store[gid][uid] = { attempts: 0, correct: 0, datesAttempted: [] };
-            const u = store[gid][uid];
+            let store: GuildMap = existsSync(WWYD_DATA_PATH)
+                ? JSON.parse(readFileSync(WWYD_DATA_PATH, "utf-8"))
+                : ({} as any);
+            store[gid] ??= { channelId: "", players: {}, currentMessageId: "", dates: {} } as any;
+            const g = store[gid];
+            const u = (g.players[uid] ??= { attempts: 0, correct: 0, datesAttempted: [] } as any);
 
             
-            const alreadyAttempted = !!(u.datesAttempted && u.datesAttempted.includes(date));
-            if (tile === "pass" && !alreadyAttempted) { u.datesAttempted.push(date); writeLeaderboard(store); }
+            
+            let alreadyAttempted = !!(u.datesAttempted && u.datesAttempted.includes(date));
+            if (tile === "pass" && !alreadyAttempted) {
+                u.datesAttempted.push(date);
+                writeFileSync(WWYD_DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
+                alreadyAttempted = true;
+            }
             if (alreadyAttempted) {
                 const eb = new EmbedManager("wwyd", interaction.client);
                 const explanationEmbed = new EmbedBuilder();
-                const files = await prepareWwydEmbed(eb, explanationEmbed, true);
-                await interaction.reply({embeds: [eb, explanationEmbed], files, flags: MessageFlags.Ephemeral });
+                const files = await prepareWwydEmbed(eb, explanationEmbed, 0);
+                await interaction.editReply({ content: "", embeds: [eb, explanationEmbed], files });
             }
             else {
                 const correct = tile === wwyd.answer;
@@ -66,7 +84,7 @@ export class InteractionHandler implements EventBuilder {
 
                     // Public announcement in the same channel
                     const channel: any = interaction.client.channels.cache.get(interaction.channelId!);
-                    if (channel && typeof channel.send === 'function') {
+                    if (channel) {
                         await channel.send(`<@${interaction.user.id}> was correct! (${u.correct} points)`);
                     }
                 } else {
@@ -75,12 +93,14 @@ export class InteractionHandler implements EventBuilder {
                 // Add explanation embeds
                 const eb = new EmbedManager("wwyd", interaction.client);
                 const explanationEmbed = new EmbedBuilder();
-                const files = await prepareWwydEmbed(eb, explanationEmbed, true);
-                await interaction.reply({ content: message, embeds: [eb, explanationEmbed], files, flags: MessageFlags.Ephemeral });
+                const files = await prepareWwydEmbed(eb, explanationEmbed, 0);
+                await interaction.editReply({ content: message, embeds: [eb, explanationEmbed], files });
 
-                u.datesAttempted = u.datesAttempted || [];
+                
+                const counts = (g.dates[date] ??= {} as any);
+                counts[tile] = (counts[tile] ?? 0) + 1;
                 u.datesAttempted.push(date);
-                writeLeaderboard(store);
+                writeFileSync(WWYD_DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
                 
                 return;
             
