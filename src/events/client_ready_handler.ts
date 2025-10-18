@@ -12,7 +12,7 @@ export class ClientReadyHandler implements EventBuilder {
   }
   async getEventCallFunction(c: Client) {
     console.log("Client", c.user!.displayName, "online!");
-    const wwydJob = new CronJob('35 18 * * *', async () => {
+    const wwydJob = new CronJob('0 10 * * *', async () => {
       if (!existsSync(WWYD_DATA_PATH)) {
         return;
       }
