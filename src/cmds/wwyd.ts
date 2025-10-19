@@ -18,8 +18,26 @@ import dayjs from "dayjs";
 import sharp from "sharp";
 import { analyzeWWYDSituation, WwydAnalysisResult } from "./wwyd/mahjong_api";
 
-export type GuildChannelMap = {
-	[guildId: string]: string;
+export const WWYD_DATA_PATH = "wwydData.json";
+export const START_DATE = dayjs("2025-03-16");
+
+export type GuildMap = {
+	[guildId: string]: {
+		channelId: string;
+		players: {
+			[userId: string]: {
+				attempts: number;
+				correct: number;
+				datesAttempted: string[];
+			};
+		};
+		currentMessageId: string;
+		dates: {
+			[date: string]: {
+				[tile: string]: number;
+			};
+		};
+	};
 };
 
 type Wwyd = {
@@ -33,23 +51,47 @@ type Wwyd = {
 	comment: (string | string[])[];
 };
 
-// Leaderboard JSON structure
-export type LeaderboardStore = {
-	[guildId: string]: {
-		[userId: string]: { attempts: number; correct: number; datesAttempted: string[] };
-	};
+/**
+ * Convert a timestamp to the WWYD "day" by pivoting at 10:00 local time.
+ * If time is before 10:00, it belongs to the previous calendar day.
+ */
+export const toWwydDate = (now: dayjs.Dayjs) => {
+	return now.hour() < 10 ? now.subtract(1, "day") : now;
 };
 
-const LEADERBOARD_FILE = "wwyd_leaderboard.json";
-const ensureLeaderboardFile = () => {
-	if (!existsSync(LEADERBOARD_FILE)) writeFileSync(LEADERBOARD_FILE, "{}");
+/**
+ * Reads the channel data from disk, perform an operation via cb, then write the result to disk.
+ * Use json file as a makeshift database to store which channels should be sent daily WWYD's.
+ *
+ * @param cb Callback to run on the retrieved data
+ */
+export const modifyWwydData = (cb: (data: GuildMap) => GuildMap) => {
+	if (!existsSync(WWYD_DATA_PATH)) {
+		writeFileSync(WWYD_DATA_PATH, "{}");
+	}
+	const data = JSON.parse(readFileSync(WWYD_DATA_PATH, "utf-8"));
+	const modifiedData = cb(data);
+	writeFileSync(WWYD_DATA_PATH, JSON.stringify(modifiedData, null, 2), "utf-8");
 };
-export const readLeaderboard = (): LeaderboardStore => {
-	ensureLeaderboardFile();
-	return JSON.parse(readFileSync(LEADERBOARD_FILE, "utf-8"));
+
+export const getLeaderboard = (guildId: string) => {
+	if (!existsSync(WWYD_DATA_PATH)) {
+		return {};
+	}
+	const data = JSON.parse(readFileSync(WWYD_DATA_PATH, "utf-8"));
+	return data[guildId]?.players || {};
 };
-export const writeLeaderboard = (store: LeaderboardStore) => {
-	writeFileSync(LEADERBOARD_FILE, JSON.stringify(store));
+
+/**
+ * Get the wwyd based on a date using the START_DATE constant.
+ */
+export const getWwyd = (wwyds: Wwyd[], date: dayjs.Dayjs) => {
+	// date provided may be any time; adjust to WWYD day (10:00 boundary)
+	const wwydDate = toWwydDate(date);
+	let index = wwydDate.diff(START_DATE, "day");
+	if (index < 0) index = 0;
+	if (index >= wwyds.length) index = wwyds.length - 1; // simple clamp
+	return { wwyd: wwyds[index], date: wwydDate, index };
 };
 
 export class WwydCommand implements CommandBuilder {
@@ -90,49 +132,42 @@ export class WwydCommand implements CommandBuilder {
 	}
 
 	async runCommand(event: Message<boolean>, args: string[]) {
-		const channelLookupFile = "wwyd_channels.json";
-		if (!existsSync(channelLookupFile)) {
-			writeFileSync(channelLookupFile, "{}");
-		}
-
-		/**
-		 * Reads the channel data from disk, perform an operation via cb, then write the result to disk.
-		 * Use json file as a makeshift database to store which channels should be sent daily WWYD's.
-		 *
-		 * @param cb Callback to run on the retrieved data
-		 */
-		const modifyChannels = (cb: (channels: GuildChannelMap) => GuildChannelMap) => {
-			const channels = JSON.parse(readFileSync(channelLookupFile, "utf-8"));
-			const modifiedChannels = cb(channels);
-			writeFileSync(channelLookupFile, JSON.stringify(modifiedChannels));
-		};
-
 		const eb = new EmbedManager(this.getCommandName(), event.client);
 
 		if (args.length === 0) {
 			eb.addContent(
-				`Available commands are ${["today", "random", "enable", "disable", "lb"]
+				`Available commands are ${["random", "enable", "disable", "lb"]
 					.map((cmd) => inlineCode(cmd))
 					.join(", ")}.`
 			);
 			event.reply({ embeds: [eb] });
 			return;
-		} else if (args[0] === "enable") {
-			// Write access only
+		}
+
+		if (["enable", "disable", "testtoday"].includes(args[0])) {
 			if (!BotProperties.writeAccess.includes(event.author.id)) {
 				return;
 			}
+		}
 
+		if (args[0] === "enable") {
 			const channelId = event.channel.id;
 
 			if (event.guildId && event.guild!.channels.cache.get(channelId)) {
-				modifyChannels((channels: GuildChannelMap) => {
-					channels[event.guildId as string] = channelId;
-					return channels;
+				modifyWwydData((data: GuildMap) => {
+					if (!data[event.guildId as string]) {
+						data[event.guildId as string] = {
+							channelId,
+							players: {},
+							currentMessageId: "",
+							dates: {},
+						};
+					} else {
+						data[event.guildId as string].channelId = channelId;
+					}
+
+					return data;
 				});
-				const lb = readLeaderboard();
-				if (!lb[event.guildId]) lb[event.guildId] = {} as any;
-				writeLeaderboard(lb);
 				eb.addContent(
 					`Enabled sending daily WWYD's in <#${channelId}> at 10am every day.`
 				);
@@ -141,26 +176,23 @@ export class WwydCommand implements CommandBuilder {
 			}
 			event.reply({ embeds: [eb] });
 		} else if (args[0] === "disable") {
-			// Write access only
-			if (!BotProperties.writeAccess.includes(event.author.id)) {
-				return;
-			}
-
 			if (event.guildId) {
-				modifyChannels((channels: GuildChannelMap) => {
-					delete channels[event.guildId as string];
-					return channels;
+				modifyWwydData((data: GuildMap) => {
+					if (data[event.guildId as string]) {
+						eb.addContent(`Disabled sending daily WWYD's.`);
+						data[event.guildId as string].channelId = "";
+					} else {
+						eb.addContent(`Daily WWYD's were not enabled in this server.`);
+					}
+					return data;
 				});
 			}
-			eb.addContent(`Disabled sending daily WWYD's.`);
-		} else if (args[0] === "today" || args[0] === "random") {
+			event.reply({ embeds: [eb] });
+		} else if (args[0] === "random") {
 			const analysisEmbed = new EmbedBuilder();
-			const files = await prepareWwydEmbed(eb, analysisEmbed, args[0] === "today");
+			const files = await prepareWwydEmbed(eb, analysisEmbed, 2);
 			event.reply({ embeds: [eb, analysisEmbed], files });
 		} else if (args[0] === "testtoday") {
-      if (!BotProperties.writeAccess.includes(event.author.id)) {
-				return;
-			}
 			// Test command to preview today's WWYD without waiting for cron
 			// Using buildDailyWwydMessage to simulate the daily message with buttons
 			const { embeds, files, components } = await buildDailyWwydMessage(eb);
@@ -172,23 +204,16 @@ export class WwydCommand implements CommandBuilder {
 				return;
 			}
 
-			const topN =
-				args[1] && !isNaN(Number(args[1]))
-					? Math.max(1, Math.min(50, parseInt(args[1])))
-					: 10;
-			const store = readLeaderboard();
-			const guildEntry = store[event.guildId] || ({} as any);
-      
-			const users = Object.keys(guildEntry)
-				.map((user) => {
-					const u = guildEntry[user] || { attempts: 0, correct: 0 };
-					const attempts = u.attempts ?? 0;
-					const correct = u.correct ?? 0;
-					const accuracy = attempts > 0 ? correct / attempts : 0;
-					return { uid: user, attempts, correct, accuracy };
-				});
+			const topN = 100
+			const lb = getLeaderboard(event.guildId);
 
-			
+			const users = Object.keys(lb).map((user) => {
+				const u = lb[user] || { attempts: 0, correct: 0 };
+				const attempts = u.attempts ?? 0;
+				const correct = u.correct ?? 0;
+				const accuracy = attempts > 0 ? correct / attempts : 0;
+				return { uid: user, attempts, correct, accuracy };
+			});
 
 			users.sort((a, b) => {
 				if (b.correct !== a.correct) return b.correct - a.correct; // more correct first
@@ -197,9 +222,9 @@ export class WwydCommand implements CommandBuilder {
 
 			const top = users.slice(0, topN).filter((u) => u.accuracy >= 0.5);
 
-      if (top.length === 0) {
+			if (top.length === 0) {
 				eb.addContent("No leaderboard data yet. Solve some daily WWYDs!");
-        eb.setFooter({"text":"Only users with at least 50% accuracy are shown."});
+				eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
 				event.reply({ embeds: [eb] });
 				return;
 			}
@@ -218,7 +243,7 @@ export class WwydCommand implements CommandBuilder {
 
 			eb.setTitle("WWYD Leaderboard");
 			eb.addContent(lines.join("\n"));
-      eb.setFooter({"text":"Only users with at least 50% accuracy are shown."});
+			eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
 			event.reply({ embeds: [eb] });
 		}
 	}
@@ -399,14 +424,15 @@ export function formatAnalysisCompact(rows: WwydAnalysisResult[], limit = 10): s
  * Prepare the embed for display. Image, title, fields, attachments etc.
  * Does not actually send the message out (channel/guild-agnostic).
  *
- * @param embed Discordjs embed object
- * @param useToday If true, generate today's. Otherwise, random.
- * @returns The files object to be sent alongside the embed.
+ * @param embed - Discord.js embed object to populate with WWYD data
+ * @param analysisEmbed - Discord.js embed object to populate with analysis data
+ * @param mode - Display mode: 0 = today, 1 = yesterday, 2 = random
+ * @returns Array of file objects to be sent alongside the embeds
  */
 export const prepareWwydEmbed = async (
 	embed: EmbedBuilder,
 	analysisEmbed: EmbedBuilder,
-	useToday = true
+	mode = 0 // 0 = today, 1 = yesterday, 2 = random
 ): Promise<{ attachment: string; name: string }[]> => {
 	// Used as the output directory for generated images.
 	if (!existsSync("tmp")) {
@@ -414,9 +440,20 @@ export const prepareWwydEmbed = async (
 	}
 
 	const wwyds: Wwyd[] = JSON.parse(readFileSync("assets/wwyd-new.json", "utf-8"));
-	const { wwyd, today } = useToday
-		? getTodaysWwyd(wwyds)
-		: { wwyd: wwyds[Math.floor(Math.random() * wwyds.length)], today: dayjs() };
+	const { wwyd, date } = (() => {
+		switch (mode) {
+			case 0: // today
+				return getWwyd(wwyds, dayjs());
+			case 1: // yesterday
+				// Subtract relative to WWYD day: getWwyd will re-adjust after subtraction
+				return getWwyd(wwyds, toWwydDate(dayjs()).subtract(1, "day"));
+			default:
+				return {
+					wwyd: wwyds[Math.floor(Math.random() * wwyds.length)],
+					date: dayjs(),
+				};
+		}
+	})();
 
 	embed.setTitle(`Answer: \\| ${spoiler(wwyd.answer)} \\|`);
 
@@ -435,7 +472,7 @@ export const prepareWwydEmbed = async (
 		value: spoiler(wwyd.comment.map(parseCommentElements).join("")),
 	});
 
-	embed.setDescription(`WWYD: ${useToday ? today.format("YYYY-MM-DD") : "Random"}`);
+	embed.setDescription(`WWYD: ${mode < 2 ? date.format("YYYY-MM-DD") : "Random"}`);
 	const outFileName = `${wwyd.hand}.png`;
 	const outFilePath = `tmp/${outFileName}`;
 
@@ -466,29 +503,17 @@ export const prepareWwydEmbed = async (
 };
 
 /**
- * Compute today's WWYD using the codebase's existing start date convention.
- */
-export const getTodaysWwyd = (wwyds: Wwyd[]) => {
-	const START_DATE = dayjs("2025-03-16");
-	const today = dayjs();
-	let index = today.diff(START_DATE, "day");
-	if (index < 0) index = 0;
-	if (index >= wwyds.length) index = wwyds.length - 1; // simple clamp
-	return { wwyd: wwyds[index], today, index };
-};
-
-/**
  * Build daily WWYD without revealing answer/analysis, with buttons for each tile guess.
  */
 export const buildDailyWwydMessage = async (embed: EmbedBuilder) => {
 	if (!existsSync("tmp")) mkdirSync("tmp");
 
 	const wwyds: Wwyd[] = JSON.parse(readFileSync("assets/wwyd-new.json", "utf-8"));
-	const { wwyd, today } = getTodaysWwyd(wwyds);
+	const { wwyd, date } = getWwyd(wwyds, dayjs());
 
 	// Title without answer
 	embed.setTitle("What Would You Discard?");
-	embed.setDescription(`WWYD: ${today.format("YYYY-MM-DD")}`);
+	embed.setDescription(`WWYD: ${date.format("YYYY-MM-DD")}`);
 
 	// Image
 	const outFileName = `${wwyd.hand}.png`;
@@ -498,14 +523,14 @@ export const buildDailyWwydMessage = async (embed: EmbedBuilder) => {
 
 	// Build buttons for each unique tile in [...hand, draw]
 	const uniqueTiles = Array.from(new Set([...wwyd.hand, wwyd.draw]));
-	const dateStr = today.format("YYYY-MM-DD");
+	const dateStr = date.format("YYYY-MM-DD");
 
 	const suitToStyle = (tile: string): ButtonStyle => {
 		if (tile.endsWith("m")) return ButtonStyle.Danger;
 		if (tile.endsWith("p")) return ButtonStyle.Secondary;
 		if (tile.endsWith("s")) return ButtonStyle.Success;
 		if (tile.endsWith("z")) return ButtonStyle.Primary;
-    return ButtonStyle.Primary; // fallback
+		return ButtonStyle.Primary; // fallback
 	};
 	const buttons = uniqueTiles.map((t) =>
 		new ButtonBuilder()
