@@ -12,7 +12,7 @@ export class ClientReadyHandler implements EventBuilder {
   }
   async getEventCallFunction(c: Client) {
     console.log("Client", c.user!.displayName, "online!");
-    const wwydJob = new CronJob('0 10 * * *', async () => {
+    const wwydJob = new CronJob('36 10 * * *', async () => {
       if (!existsSync(WWYD_DATA_PATH)) {
         return;
       }
@@ -22,7 +22,7 @@ export class ClientReadyHandler implements EventBuilder {
 
       for (const guildId in guilds) {
         let guildData = guilds[guildId];
-        const eb = new EmbedManager("wwyd", c);
+        
         const channel = c.channels.cache.get(guildData.channelId) as TextChannel;
         if (!channel) continue;
 
@@ -32,7 +32,9 @@ export class ClientReadyHandler implements EventBuilder {
             const msg = await channel.messages.fetch(prevMessage);
             if (msg) {
               // Prepare yesterday's explanation embed and counts content
-              let files = await prepareWwydEmbed(eb, new EmbedBuilder(), 1);
+              const eb = new EmbedManager("wwyd", c);
+              const analysisEmbed = new EmbedBuilder();
+              let files = await prepareWwydEmbed(eb, analysisEmbed, 1);
               const dateStr = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
               const dateCounts = guildData.dates?.[dateStr] || {};
               const entries = Object.entries(dateCounts);
@@ -43,7 +45,7 @@ export class ClientReadyHandler implements EventBuilder {
                 ? `Results ${dateStr} | ${summary} | Total:${total}`
                 : `Results ${dateStr} | No responses recorded.`;
               const content = `\`\`\`text\n${oneLine}\n\`\`\``;
-              await msg.edit({ content, embeds: [eb], files, components: []});
+              await msg.edit({ content, embeds: [eb, analysisEmbed], files, components: []});
             }
           } catch (e) {
             console.log("Failed to fetch previous WWYD message:", e);
@@ -51,6 +53,7 @@ export class ClientReadyHandler implements EventBuilder {
         }
 
         // Daily mode with buttons
+        const eb = new EmbedBuilder();
         const { embeds, files, components } = await buildDailyWwydMessage(eb);
         const sent = await channel.send({ embeds, files, components });
         // Update the current message ID using the sent message
