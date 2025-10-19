@@ -204,10 +204,7 @@ export class WwydCommand implements CommandBuilder {
 				return;
 			}
 
-			const topN =
-				args[1] && !isNaN(Number(args[1]))
-					? Math.max(1, Math.min(50, parseInt(args[1])))
-					: 10;
+			const topN = 100
 			const lb = getLeaderboard(event.guildId);
 
 			const users = Object.keys(lb).map((user) => {
