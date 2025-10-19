@@ -217,7 +217,7 @@ export class WwydCommand implements CommandBuilder {
 
 			users.sort((a, b) => {
 				if (b.correct !== a.correct) return b.correct - a.correct; // more correct first
-				return b.accuracy - a.accuracy; // higher accuracy
+				return a.attempts - b.attempts; // lower attempts first
 			});
 
 			const top = users.slice(0, topN).filter((u) => u.accuracy >= 0.5);
@@ -230,11 +230,20 @@ export class WwydCommand implements CommandBuilder {
 			}
 			const lines: string[] = [];
 			let rank = 1;
-			for (const row of top) {
-				const member = event.guild?.members.cache.get(row.uid);
+			let shownRank = 1
+			for (let i = 0; i < top.length; i++) {
+				if (i > 0) {
+					const p = top[i - 1];
+					const c = top[i];
+					if (p.correct !== c.correct || p.attempts !== c.attempts) {
+						shownRank = rank;
+					}
+				}
+				const row = top[i];
 				const name = `<@${row.uid}>`;
+				// For some reason, I need to bold the number or it defaults to 1. 2. 3. ??????
 				lines.push(
-					`${rank}. ${name} — ${row.correct} pts • ${row.attempts} attempts • ${(
+					`**${shownRank}.** ${name} — ${row.correct} pts • ${row.attempts} attempts • ${(
 						row.accuracy * 100
 					).toFixed(1)}%`
 				);
