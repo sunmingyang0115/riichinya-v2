@@ -2,7 +2,7 @@ import { CronJob } from "cron";
 import { EventBuilder } from "../data/event_manager";
 import { Events, Client, TextChannel, EmbedBuilder} from "discord.js";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { GuildMap, prepareWwydEmbed, buildDailyWwydMessage, WWYD_DATA_PATH } from "../cmds/wwyd";
+import { GuildMap, prepareWwydEmbed, buildDailyWwydMessage, WWYD_DATA_PATH, toWwydDate } from "../cmds/wwyd";
 import { EmbedManager } from "../data/embed_manager";
 import dayjs from "dayjs";
 

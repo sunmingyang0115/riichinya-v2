@@ -5,7 +5,7 @@ import { EmbedManager } from "../data/embed_manager";
 import { EventBuilder } from "../data/event_manager";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, Interaction, MessageFlags } from "discord.js"
 import BotProperties from "../../bot_properties.json"
-import { prepareWwydEmbed, WWYD_DATA_PATH, START_DATE, type GuildMap } from "../cmds/wwyd";
+import { prepareWwydEmbed, WWYD_DATA_PATH, START_DATE, type GuildMap, toWwydDate } from "../cmds/wwyd";
 import dayjs from "dayjs";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 
@@ -30,8 +30,7 @@ export class InteractionHandler implements EventBuilder {
 
             // Only allow the currently active WWYD window (10:00 -> next day's 10:00)
             const now = dayjs();
-            const boundary = now.hour(10).minute(0).second(0).millisecond(0);
-            const activeDateStr = (now.isBefore(boundary) ? now.subtract(1, "day") : now).format("YYYY-MM-DD");
+            const activeDateStr = toWwydDate(now).format("YYYY-MM-DD");
             if (date !== activeDateStr) {
                 await interaction.deferUpdate();
                 return;

@@ -29,15 +29,15 @@ export type GuildMap = {
 				attempts: number;
 				correct: number;
 				datesAttempted: string[];
-			}
-		}
+			};
+		};
 		currentMessageId: string;
 		dates: {
 			[date: string]: {
 				[tile: string]: number;
-			}
-		}
-	}
+			};
+		};
+	};
 };
 
 type Wwyd = {
@@ -49,6 +49,14 @@ type Wwyd = {
 	draw: string;
 	answer: string;
 	comment: (string | string[])[];
+};
+
+/**
+ * Convert a timestamp to the WWYD "day" by pivoting at 10:00 local time.
+ * If time is before 10:00, it belongs to the previous calendar day.
+ */
+export const toWwydDate = (now: dayjs.Dayjs) => {
+	return now.hour() < 10 ? now.subtract(1, "day") : now;
 };
 
 /**
@@ -78,10 +86,12 @@ export const getLeaderboard = (guildId: string) => {
  * Get the wwyd based on a date using the START_DATE constant.
  */
 export const getWwyd = (wwyds: Wwyd[], date: dayjs.Dayjs) => {
-	let index = date.diff(START_DATE, "day");
+	// date provided may be any time; adjust to WWYD day (10:00 boundary)
+	const wwydDate = toWwydDate(date);
+	let index = wwydDate.diff(START_DATE, "day");
 	if (index < 0) index = 0;
 	if (index >= wwyds.length) index = wwyds.length - 1; // simple clamp
-	return { wwyd: wwyds[index], date, index };
+	return { wwyd: wwyds[index], date: wwydDate, index };
 };
 
 export class WwydCommand implements CommandBuilder {
@@ -132,12 +142,15 @@ export class WwydCommand implements CommandBuilder {
 			);
 			event.reply({ embeds: [eb] });
 			return;
-		} else if (args[0] === "enable") {
-			// Write access only
+		}
+
+		if (["enable", "disable", "testtoday"].includes(args[0])) {
 			if (!BotProperties.writeAccess.includes(event.author.id)) {
 				return;
 			}
+		}
 
+		if (args[0] === "enable") {
 			const channelId = event.channel.id;
 
 			if (event.guildId && event.guild!.channels.cache.get(channelId)) {
@@ -147,7 +160,7 @@ export class WwydCommand implements CommandBuilder {
 							channelId,
 							players: {},
 							currentMessageId: "",
-							dates: {}
+							dates: {},
 						};
 					} else {
 						data[event.guildId as string].channelId = channelId;
@@ -163,11 +176,6 @@ export class WwydCommand implements CommandBuilder {
 			}
 			event.reply({ embeds: [eb] });
 		} else if (args[0] === "disable") {
-			// Write access only
-			if (!BotProperties.writeAccess.includes(event.author.id)) {
-				return;
-			}
-
 			if (event.guildId) {
 				modifyWwydData((data: GuildMap) => {
 					if (data[event.guildId as string]) {
@@ -178,18 +186,13 @@ export class WwydCommand implements CommandBuilder {
 					}
 					return data;
 				});
-				
 			}
 			event.reply({ embeds: [eb] });
-			
 		} else if (args[0] === "random") {
 			const analysisEmbed = new EmbedBuilder();
 			const files = await prepareWwydEmbed(eb, analysisEmbed, 2);
 			event.reply({ embeds: [eb, analysisEmbed], files });
 		} else if (args[0] === "testtoday") {
-      if (!BotProperties.writeAccess.includes(event.author.id)) {
-				return;
-			}
 			// Test command to preview today's WWYD without waiting for cron
 			// Using buildDailyWwydMessage to simulate the daily message with buttons
 			const { embeds, files, components } = await buildDailyWwydMessage(eb);
@@ -205,18 +208,15 @@ export class WwydCommand implements CommandBuilder {
 				args[1] && !isNaN(Number(args[1]))
 					? Math.max(1, Math.min(50, parseInt(args[1])))
 					: 10;
-			const lb = getLeaderboard(event.guildId)
-      
-			const users = Object.keys(lb)
-				.map((user) => {
-					const u = lb[user] || { attempts: 0, correct: 0 };
-					const attempts = u.attempts ?? 0;
-					const correct = u.correct ?? 0;
-					const accuracy = attempts > 0 ? correct / attempts : 0;
-					return { uid: user, attempts, correct, accuracy };
-				});
+			const lb = getLeaderboard(event.guildId);
 
-			
+			const users = Object.keys(lb).map((user) => {
+				const u = lb[user] || { attempts: 0, correct: 0 };
+				const attempts = u.attempts ?? 0;
+				const correct = u.correct ?? 0;
+				const accuracy = attempts > 0 ? correct / attempts : 0;
+				return { uid: user, attempts, correct, accuracy };
+			});
 
 			users.sort((a, b) => {
 				if (b.correct !== a.correct) return b.correct - a.correct; // more correct first
@@ -225,9 +225,9 @@ export class WwydCommand implements CommandBuilder {
 
 			const top = users.slice(0, topN).filter((u) => u.accuracy >= 0.5);
 
-      if (top.length === 0) {
+			if (top.length === 0) {
 				eb.addContent("No leaderboard data yet. Solve some daily WWYDs!");
-        eb.setFooter({"text":"Only users with at least 50% accuracy are shown."});
+				eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
 				event.reply({ embeds: [eb] });
 				return;
 			}
@@ -246,7 +246,7 @@ export class WwydCommand implements CommandBuilder {
 
 			eb.setTitle("WWYD Leaderboard");
 			eb.addContent(lines.join("\n"));
-      eb.setFooter({"text":"Only users with at least 50% accuracy are shown."});
+			eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
 			event.reply({ embeds: [eb] });
 		}
 	}
@@ -435,7 +435,7 @@ export function formatAnalysisCompact(rows: WwydAnalysisResult[], limit = 10): s
 export const prepareWwydEmbed = async (
 	embed: EmbedBuilder,
 	analysisEmbed: EmbedBuilder,
-	mode = 0, // 0 = today, 1 = yesterday, 2 = random
+	mode = 0 // 0 = today, 1 = yesterday, 2 = random
 ): Promise<{ attachment: string; name: string }[]> => {
 	// Used as the output directory for generated images.
 	if (!existsSync("tmp")) {
@@ -448,11 +448,12 @@ export const prepareWwydEmbed = async (
 			case 0: // today
 				return getWwyd(wwyds, dayjs());
 			case 1: // yesterday
-				return getWwyd(wwyds, dayjs().subtract(1, 'day'));
+				// Subtract relative to WWYD day: getWwyd will re-adjust after subtraction
+				return getWwyd(wwyds, toWwydDate(dayjs()).subtract(1, "day"));
 			default:
 				return {
 					wwyd: wwyds[Math.floor(Math.random() * wwyds.length)],
-					date: dayjs()
+					date: dayjs(),
 				};
 		}
 	})();
@@ -504,8 +505,6 @@ export const prepareWwydEmbed = async (
 	];
 };
 
-
-
 /**
  * Build daily WWYD without revealing answer/analysis, with buttons for each tile guess.
  */
@@ -534,7 +533,7 @@ export const buildDailyWwydMessage = async (embed: EmbedBuilder) => {
 		if (tile.endsWith("p")) return ButtonStyle.Secondary;
 		if (tile.endsWith("s")) return ButtonStyle.Success;
 		if (tile.endsWith("z")) return ButtonStyle.Primary;
-	return ButtonStyle.Primary; // fallback
+		return ButtonStyle.Primary; // fallback
 	};
 	const buttons = uniqueTiles.map((t) =>
 		new ButtonBuilder()
@@ -564,6 +563,3 @@ export const buildDailyWwydMessage = async (embed: EmbedBuilder) => {
 		components: rows,
 	};
 };
-
-
-
