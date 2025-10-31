@@ -220,11 +220,11 @@ export class WwydCommand implements CommandBuilder {
 				return a.attempts - b.attempts; // lower attempts first
 			});
 
-			const top = users.slice(0, topN).filter((u) => u.accuracy >= 0.5);
+			const top = users.slice(0, topN).filter((u) => u.accuracy >= 0.5 || u.correct >= 5);
 
 			if (top.length === 0) {
 				eb.addContent("No leaderboard data yet. Solve some daily WWYDs!");
-				eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
+				eb.setFooter({ text: "Only users with at least 50% accuracy or at least 5 correct answers are shown." });
 				event.reply({ embeds: [eb] });
 				return;
 			}
@@ -252,7 +252,7 @@ export class WwydCommand implements CommandBuilder {
 
 			eb.setTitle("WWYD Leaderboard");
 			eb.addContent(lines.join("\n"));
-			eb.setFooter({ text: "Only users with at least 50% accuracy are shown." });
+			eb.setFooter({ text: "Only users with at least 50% accuracy or at least 5 correct answers are shown." });
 			event.reply({ embeds: [eb] });
 		}
 	}
