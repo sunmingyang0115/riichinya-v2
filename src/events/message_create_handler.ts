@@ -3,6 +3,7 @@ import { EventBuilder } from "../data/event_manager";
 import { Events, Message } from "discord.js"
 import BotProperties from '../../bot_properties.json'
 import { EmbedManager } from "../data/embed_manager";
+import { checkIfScammer } from "../captcha";
 
 export class MessageCreateHandler implements EventBuilder {
     private messageMap: Map<string, CommandBuilder>;
@@ -18,6 +19,11 @@ export class MessageCreateHandler implements EventBuilder {
     async getEventCallFunction(m: Message) {
         if (m.author.bot) return;
         let frag = m.content.split(/\s+/g);
+        
+        if (checkIfScammer(m)) {
+            await m.delete();
+        }
+
         if (frag[0] == BotProperties.prefix && this.messageMap.has(frag[1])) {
             let command = this.messageMap.get(frag[1])!;
             try {
