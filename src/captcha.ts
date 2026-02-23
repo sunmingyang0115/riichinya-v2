@@ -1,16 +1,6 @@
 import { Message } from "discord.js";
 
-const ONE_DAY = 1000 * 60 * 60 * 24;
-
-function testFormat(time: number) {
-    const seconds = Math.floor(time / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    const formattedTime = `${days} days, ${hours % 24} hours, ${minutes % 60} minutes, ${seconds % 60} seconds`;
-    console.log(formattedTime);
-}
+const NEW_USER_THRESHOLD = 1000 * 60 * 60 * 24 * 7; // one week
 
 const substrs = [
     "first come first serve",
@@ -18,6 +8,7 @@ const substrs = [
     "free",
     "need of it",
     "dm",
+    "everyone"
 ]
 
 function clean(text: string) {
@@ -34,7 +25,7 @@ export function checkIfScammer(m: Message) {
     if ( m.member == null || m.member?.joinedTimestamp == null) return;
     const timeSinceJoinedMs = Date.now() - m.member!.joinedTimestamp!;
 
-    if (timeSinceJoinedMs < ONE_DAY) {
+    if (timeSinceJoinedMs < NEW_USER_THRESHOLD) {
         const content = clean(m.content);
         let occurrences = substrs.reduce((count, sub) => {
             return content.includes(sub.toLowerCase())
@@ -45,7 +36,7 @@ export function checkIfScammer(m: Message) {
         if (m.attachments.size > 0) occurrences++;
         if (content.length > 200) occurrences++;
 
-        if (occurrences > 3) {
+        if (occurrences > 2) {
             return true;
         }
     }
