@@ -7,7 +7,7 @@ import { EmbedManager, Header } from "../data/embed_manager";
 import { parse } from "json2csv";
 import { playerProfileCreator } from "../templates/playerProfile";
 import { RiichiDatabase } from "./riichidb/sql_db2";
-import { SeasonEntry } from "./riichidb/db_struct";
+import { GameEntry, ParticipantEntry, SeasonEntry } from "./riichidb/db_struct";
 import BotProperties from "../../bot_properties.json"
 
 export class RiichiDbCommand implements CommandBuilder {
@@ -106,21 +106,53 @@ export class RiichiDbCommand implements CommandBuilder {
             }
             const [embed, files] = await playerProfileCreator(season!, user);
             event.reply({ embeds: [embed], files: files });
-        } 
+        } else if (args[0] === 'game') {
+            const id = args[1].replace(/<@|>/g, "")
+            // check if provided id is comprised of numbers
+            if (!/^\d+$/.test(id)) {
+                throw Error("invalid player id");
+            }
+            const game = await RiichiDatabase.getGame(id);
+            const players = await RiichiDatabase.getAllParticipants(game!.game_id)
+
+            event.reply(`\`\`\`too lazy to implement so heres the json:\n${JSON.stringify(game)}\n${JSON.stringify(players)}\`\`\``);
+        }
 
 
 
         // 'admin' commands 
-        else if (is_admin && args[0] == "set_season") {
+        else if (is_admin && args[0] == "set_current_season") {
             await RiichiDatabase.setCurrentSeasonEnsureExists(args[1]);
             event.reply(`set season to ${args[1]}`)
+        } else if (is_admin && args[0] == "get_current_season") {
+            const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
+            event.reply(`current season is ${season!.display_name}`)
         } else if (is_admin && args[0] == "add_season") {
             const season = JSON.parse(args.slice(1).join(' ')) as SeasonEntry;
             await RiichiDatabase.addSeason(season);
             event.reply(`added season ${season.display_name}`)
-        } else if (is_admin && args[0] == "delete_game") {
+        }
+        else if (is_admin && args[0] == "add_game") {
+            const game = JSON.parse(args.slice(1).join(' ')) as GameEntry;
+            await RiichiDatabase.addGame(game);
+            event.reply(`added game ${game.game_id}`)
+        }
+        else if (is_admin && args[0] == "add_participant") {
+            const p = JSON.parse(args.slice(1).join(' ')) as ParticipantEntry;
+            await RiichiDatabase.addParticipant(p);
+            event.reply(`added participant ${p.player_id} to ${p.game_id}`)
+        }
+        else if (is_admin && args[0] == "delete_game") {
             await RiichiDatabase.deleteGame(args[1]);
             event.reply(`deleted game ${args[1]}`)
+        }
+        else if (is_admin && args[0] == "delete_season") {
+            await RiichiDatabase.deleteSeason(args[1]);
+            event.reply(`deleted season ${args[1]}`)
+        }
+        else if (is_admin && args[0] == "delete_participant") {
+            await RiichiDatabase.deleteParticipant(args[1], args[2]);
+            event.reply(`deleted participant ${args[1]} in ${args[2]}`)
         } else  {
             const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
 

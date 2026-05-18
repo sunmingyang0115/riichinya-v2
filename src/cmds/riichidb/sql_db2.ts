@@ -51,14 +51,22 @@ export class RiichiDatabase {
     public static async addParticipant(participant: ParticipantEntry): Promise<void> {
         await this.db.addEntryToTable("ParticipantTable", participant);
     }
-    public static async deleteParticipant(player_id: string): Promise<void> {
-        await this.db.deleteTableEntryByID("ParticipantTable", {"player_id": player_id});
+    public static async deleteParticipant(player_id: string, game_id: string): Promise<void> {
+        await this.db.deleteTableEntryByID("ParticipantTable", {"player_id": player_id, "game_id": game_id});
     }
-    public static async getParticipant(player_id: string): Promise<ParticipantEntry | null> {
-        return await this.db.getTableEntryByID<ParticipantEntry>("ParticipantTable", {"player_id": player_id});
+    public static async getParticipant(player_id: string, game_id: string): Promise<ParticipantEntry | null> {
+        return await this.db.getTableEntryByID<ParticipantEntry>("ParticipantTable", {"player_id": player_id, "game_id": game_id});
     }
 
     // special queries
+
+    public static async getAllParticipants(game_id: string): Promise<ParticipantEntry[]> {
+        const query = `
+            select * from ParticipantTable where game_id = ?
+        `
+        const db = await this.db.getDB();
+        return await db.all<ParticipantEntry[]>(query, [game_id]);
+    }
 
     public static async getCurrentSeasonEnsureExists(): Promise<SeasonEntry | null> {
         const query = `
