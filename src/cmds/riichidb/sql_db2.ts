@@ -1,6 +1,6 @@
 import sqlite3 from 'sqlite3'
 import { open, Database } from 'sqlite'
-import { GameEntry, ParticipantEntry, SeasonEntry, SQLConfigTable, SQLGameTable, SQLParticipantTable, SQLSeasonTable } from './db_struct';
+import { ConfigEntry, GameEntry, ParticipantEntry, SeasonEntry, SQLConfigTable, SQLGameTable, SQLParticipantTable, SQLSeasonTable } from './db_struct';
 import { LeaderboardEntry, OpponentDelta, PlayerProfile, RecentGameEntry } from './query_struct';
 import { off } from 'process';
 import { DatabaseWrapper } from '../../database/database_wrapper';
@@ -17,6 +17,16 @@ export class RiichiDatabase {
     }
 
     // ***
+
+    public static async addConfig(config: ConfigEntry): Promise<void> {
+        await this.db.addEntryToTable("ConfigTable", config);
+    }
+    public static async deleteConfig(key: string): Promise<void> {
+        await this.db.deleteTableEntryByID("ConfigTable", {"key": key});
+    }
+    public static async getConfig(key: string): Promise<ConfigEntry | null> {
+        return await this.db.getTableEntryByID<ConfigEntry>("ConfigTable", {"key": key});
+    }
 
     public static async addSeason(season: SeasonEntry): Promise<void> {
         await this.db.addEntryToTable("SeasonTable", season);
@@ -46,6 +56,40 @@ export class RiichiDatabase {
     }
     public static async getParticipant(player_id: string): Promise<ParticipantEntry | null> {
         return await this.db.getTableEntryByID<ParticipantEntry>("ParticipantTable", {"player_id": player_id});
+    }
+
+    // special queries
+
+    public static async getCurrentSeasonEnsureExists(): Promise<SeasonEntry | null> {
+        const query = `
+            select s.* 
+            from ConfigTable c
+                inner join SeasonTable s on c.value = s.season_id
+            where c.key = 'current_season'
+            limit 1
+        `;
+        const database = await this.db.getDB();
+        const result = await database.get<SeasonEntry>(query);
+        return result || null;
+    }
+
+    public static async setCurrentSeasonEnsureExists(season_id: string): Promise<void> {
+        const db = await this.db.getDB();
+        const checkQuery = `
+            select 1 
+            from SeasonTable 
+            where season_id = ? 
+            limit 1
+        `;
+        if (!await db.get(checkQuery, [season_id])) {
+            throw new Error(`season_id ${season_id} does not exist in SeasonTable`);
+        }
+        const updateQuery = `
+            insert into ConfigTable (key, value) 
+            values ('current_season', ?)
+            on conflict(key) do update set value = excluded.value
+        `;
+        await db.run(updateQuery, [season_id]);
     }
 
     public static async getLeaderboard(offset: number, limit: number, season_id: string): Promise<LeaderboardEntry[]> {
@@ -92,8 +136,8 @@ export class RiichiDatabase {
                 max(p.raw_score) as highest_score,
                 min(p.raw_score) as lowest_score,
                 count(p.game_id) as games_played,
-                avg(p.placement) as average_placement,
-                avg(p.adj_score) as average_score
+                sum(p.placement) as total_placement,
+                rank() over (order by sum(p.adj_score) desc) as rank
             from ParticipantTable p
                 inner join GameTable g on p.game_id = g.game_id
                 where g.season_id = ? and p.player_id = ?

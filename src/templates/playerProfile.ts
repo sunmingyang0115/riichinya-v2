@@ -1,22 +1,28 @@
-import { RiichiDatabase } from "../cmds/riichidb/sql_db";
+import { RiichiDatabase } from "../cmds/riichidb/sql_db2";
 import { EmbedBuilder, User } from "discord.js";
 import { table } from "table";
 import { generateCombinedSvg } from "../cmds/mjs/charts"
 import { Result } from "../cmds/mjs/common";
 import sharp from "sharp";
+import { SeasonEntry } from "../cmds/riichidb/db_struct";
 
-export async function playerProfileCreator(user: User): Promise<[EmbedBuilder,{ attachment: string; name: string }[]]> {
+export async function playerProfileCreator(season: SeasonEntry, user: User): Promise<[EmbedBuilder,{ attachment: string; name: string }[]]> {
     // Fetch player data
-    const [rank, statsArr, games] = await Promise.all([
-        RiichiDatabase.getPlayerRank(user.id),
-        RiichiDatabase.getPlayerProfile(user.id),
-        RiichiDatabase.getPlayerResults(user.id)
-    ]);
+    // const [rank, statsArr, games] = await Promise.all([
+    //     RiichiDatabase.getPlayerRank(user.id),
+    //     RiichiDatabase.getPlayerProfile(user.id),
+    //     RiichiDatabase.getPlayerResults(user.id)
+    // ]);
+    const profile = await RiichiDatabase.getPlayerProfile(season.season_id, user.id);
+    const recentGames = await RiichiDatabase.getRecentGames(0, 20, season.season_id, user.id);
+    // I love arbitrary limits
+    const opponentDelta = await RiichiDatabase.getOpponentDelta(0, 200, season.season_id, user.id);
+
     //need to subtract 1 because Result uses 0-index
-    const rankResults = games.map(g => g.rank - 1 as Result).reverse();
+    const rankResults = recentGames.map(g => g.rank - 1 as Result).reverse();
     const counts = [0, 1, 2, 3].map(n => rankResults.filter(x => x === n).length);
     
-    const opponentStats = await RiichiDatabase.getOpponentDelta(user.id);
+    // const opponentStats = await RiichiDatabase.getOpponentDelta(user.id);
     const percentages = counts.map(count => count / rankResults.length);
 
     const svg = generateCombinedSvg(rankResults, percentages)
@@ -25,7 +31,7 @@ export async function playerProfileCreator(user: User): Promise<[EmbedBuilder,{ 
     const imgPath = `tmp/${imgName}`;
 
     await sharp(Buffer.from(svg)).toFile(imgPath);
-    const stats = statsArr[0];
+    const stats = profile;
     const embed = new EmbedBuilder()
         .setTitle(`${user.username}'s Mahjong Profile`)
         .setThumbnail(user.displayAvatarURL())
@@ -46,30 +52,30 @@ export async function playerProfileCreator(user: User): Promise<[EmbedBuilder,{ 
     // Add stats
     if (stats) {
         // Calculate averages from available fields
-        const avgPlacement = stats.rank_total / stats.game_total;
-        const adjAvg = stats.game_total > 0 ? (stats.score_adj_total / stats.game_total) : 0;
-        const rawAvg = stats.game_total > 0 ? (stats.score_raw_total / stats.game_total) : 0;
+        const avgPlacement = stats.games_played > 0 ? (stats.total_placement / stats.games_played): 0;
+        const adjAvg = stats.games_played > 0 ? (stats.total_score / stats.games_played) : 0;
+        const rawAvg = stats.games_played > 0 ? (stats.total_raw_score / stats.games_played) : 0;
         embed.addFields(
-            { name: "Rank", value: `${rank[0].rank}`, inline: true},
+            { name: "Rank", value: `${stats.rank}`, inline: true},
             { name: "Avg. Placement", value: `${avgPlacement.toFixed(1)}`, inline: true },
-            { name: "Total Games", value: `${stats.game_total}`, inline: true },
+            { name: "Total Games", value: `${stats.games_played}`, inline: true },
             { name: "\t", value: "\t"},
             { name: "Adj. Score (Avg)", value: `${adjAvg.toFixed(1)}`, inline: true },
-            { name: "Raw Score (Avg)", value: `${(rawAvg * 1000).toFixed(0)}`, inline: true }
+            { name: "Raw Score (Avg)", value: `${rawAvg.toFixed(0)}`, inline: true }
         );
     } else {
         embed.setDescription("No stats found for this player.");
     }
     // Game history (show up to 5 most recent) as a table
-    if (games && games.length > 0) {
+    if (recentGames && recentGames.length > 0) {
         const tableData = [
             ["Rank", "Adj", "Raw", "Date"],
-            ...games.slice(0, 5).map(g => [
+            ...recentGames.slice(0, 5).map(g => [
             String(g.rank),
-            formatAdj(g.adj / 1000),
-            g.raw,
+            formatAdj(g.adj_score / 1000),
+            g.raw_score,
             (() => {
-                const d = new Date(Number(g.time));
+                const d = new Date(g.date);
                 const month = d.getMonth() + 1;
                 const monthStr = month < 10 ? `0${month}` : `${month}`;
                 return `${monthStr}/${d.getDate()}`;
@@ -84,20 +90,20 @@ ${historyTable}${'```'}`, inline: false });
     }
 
     // Best and worst opponent by adj score diff
-    if (opponentStats && opponentStats.size > 0) {
+    if (opponentDelta && opponentDelta.length > 0) {
         // Convert to array and sort by adj diff
-        const arr = Array.from(opponentStats.entries());
-        arr.sort((a, b) => b[1].adj - a[1].adj);
-        const worst = arr[0];
-        const best = arr[arr.length - 1];
+        // const arr = Array.from(opponentDelta.entries());
+        const sorted = opponentDelta.sort((a, b) => b.adj_score_delta - a.adj_score_delta);
+        const worst = sorted[0];
+        const best = sorted[sorted.length - 1];
         embed.addFields({
             name: "Tile Feeder",
-            value: `<@${worst[0]}>\n **${formatAdj(worst[1].adj / 1000)}** (Adj) over ${worst[1].games} game(s)`,
+            value: `<@${worst.opponent_id}>\n **${formatAdj(worst.adj_score_delta / 1000)}** (Adj) over ${worst.games_played_together} game(s)`,
             inline: true
             },
             {
             name: "Challenging Matchup",
-            value: `<@${best[0]}>\n **${formatAdj(best[1].adj / 1000)}** (Adj) over ${best[1].games} game(s)`,
+            value: `<@${best.opponent_id}>\n **${formatAdj(best.adj_score_delta / 1000)}** (Adj) over ${best.games_played_together} game(s)`,
             inline: true
         });
     }

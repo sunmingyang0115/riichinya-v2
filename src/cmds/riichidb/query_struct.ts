@@ -6,12 +6,12 @@ export interface LeaderboardEntry {
 export interface PlayerProfile {
     player_id: string;
     total_score: number;
+    total_placement: number;
     total_raw_score: number;
     highest_score: number;
     lowest_score: number;
     games_played: number;
-    average_placement: number;
-    average_score: number;
+    rank: number;
 }
 
 export interface OpponentDelta {

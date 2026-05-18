@@ -26,6 +26,7 @@ export interface SeasonEntry {
     uma2: number;
     uma3: number;
     uma4: number;
+    target: number;
     oka: number;
 }
 export const SQLSeasonTable = `
@@ -38,6 +39,7 @@ export const SQLSeasonTable = `
         uma2            integer not null,
         uma3            integer not null,
         uma4            integer not null,
+        target          integer not null,
         oka             integer not null
     )`
 
@@ -61,9 +63,11 @@ export const SQLParticipantTable = `
         foreign key (game_id) references GameTable(game_id) on delete cascade
     )`
 
-export interface ConfigTable {
-    current_season: string;
+export interface ConfigEntry {
+    key: string;
+    value: string;
 };
+
 export const SQLConfigTable = `
     create table if not exists ConfigTable (
         key     text not null primary key,
