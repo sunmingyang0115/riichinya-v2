@@ -1,6 +1,6 @@
 
-import { parseScoreFromRaw } from "../cmds/riichidb/score_parser";
-import { RiichiDatabase } from "../cmds/riichidb/sql_db";
+import { parseScoreFromRaw } from "../cmds/riichidb/score_parser2";
+import { RiichiDatabase } from "../cmds/riichidb/sql_db2";
 import { EmbedManager } from "../data/embed_manager";
 import { EventBuilder } from "../data/event_manager";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, Interaction, MessageFlags } from "discord.js"
@@ -14,6 +14,7 @@ export class InteractionHandler implements EventBuilder {
         return Events.InteractionCreate;
     }
     async getEventCallFunction(interaction : Interaction)  {
+        if (interaction.guildId === null || !BotProperties.activeGuilds.includes(interaction.guildId!)) return;
 
         
         // WWYD guess buttons
@@ -114,7 +115,6 @@ export class InteractionHandler implements EventBuilder {
         // Existing context menu flow below (admin only)
         if (!interaction.isMessageContextMenuCommand()) return;
         if (!BotProperties.writeAccess.includes(interaction.user.id)) return;
-        if (interaction.guildId === null || !BotProperties.activeGuilds.includes(interaction.guildId!)) return;
 
         try {
             let str = interaction.targetMessage.content;
@@ -130,11 +130,34 @@ export class InteractionHandler implements EventBuilder {
 
             let gameid = interaction.targetMessage.id!
 
-            if (await RiichiDatabase.hasGameID(gameid)) {
-                throw new Error(`Score already exists in database.`);
-            }
+            // if (await RiichiDatabase.hasGameID(gameid)) {
+            //     throw new Error(`Score already exists in database.`);
+            // }
         
-            await RiichiDatabase.insertData(gameid, parseScoreFromRaw(splice));
+            // await RiichiDatabase.insertData(gameid, parseScoreFromRaw(splice));
+            const cur_season = await RiichiDatabase.getCurrentSeasonEnsureExists();
+            if (cur_season == null) {
+                throw new Error("current season is invalid/not set");
+            }
+            const gameinfo = parseScoreFromRaw(splice, cur_season);
+            console.log(gameinfo.length)
+            // add scores
+            await RiichiDatabase.addGame({
+                "game_id": gameid,
+                "date": new Date().toISOString(),
+                "notes": "",
+                "season_id": cur_season.season_id
+            })
+            gameinfo.forEach(async (p, i) => {
+                await RiichiDatabase.addParticipant({
+                    "adj_score": p.scoreAdj,
+                    "game_id": gameid,
+                    "placement": p.placement,
+                    "raw_score": p.scoreRaw,
+                    "player_id": p.id
+                })
+            })
+
             await interaction.targetMessage.react("📥");
             await interaction.reply({
                 embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
