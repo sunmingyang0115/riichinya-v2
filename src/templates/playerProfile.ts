@@ -53,15 +53,15 @@ export async function playerProfileCreator(season: SeasonEntry, user: User): Pro
     if (stats) {
         // Calculate averages from available fields
         const avgPlacement = stats.games_played > 0 ? (stats.total_placement / stats.games_played): 0;
-        const adjAvg = stats.games_played > 0 ? (stats.total_score / stats.games_played) : 0;
-        const rawAvg = stats.games_played > 0 ? (stats.total_raw_score / stats.games_played) : 0;
+        const adjAvg = stats.games_played > 0 ? (stats.total_score / 1000.0 / stats.games_played) : 0;
+        const rawAvg = stats.games_played > 0 ? (stats.total_raw_score / 1000.0 / stats.games_played) : 0;
         embed.addFields(
             { name: "Rank", value: `${stats.rank}`, inline: true},
             { name: "Avg. Placement", value: `${avgPlacement.toFixed(1)}`, inline: true },
             { name: "Total Games", value: `${stats.games_played}`, inline: true },
             { name: "\t", value: "\t"},
             { name: "Adj. Score (Avg)", value: `${adjAvg.toFixed(1)}`, inline: true },
-            { name: "Raw Score (Avg)", value: `${rawAvg.toFixed(0)}`, inline: true }
+            { name: "Raw Score (Avg)", value: `${(rawAvg * 1000).toFixed(0)}`, inline: true }
         );
     } else {
         embed.setDescription("No stats found for this player.");

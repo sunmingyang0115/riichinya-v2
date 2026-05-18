@@ -8,6 +8,7 @@ import { parse } from "json2csv";
 import { playerProfileCreator } from "../templates/playerProfile";
 import { RiichiDatabase } from "./riichidb/sql_db2";
 import { SeasonEntry } from "./riichidb/db_struct";
+import BotProperties from "../../bot_properties.json"
 
 export class RiichiDbCommand implements CommandBuilder {
     getDocumentation(): string {
@@ -71,40 +72,137 @@ export class RiichiDbCommand implements CommandBuilder {
     getCooldown(): number {
         return 10;
     }
+    
     async runCommand(event: Message<boolean>, args: string[]): Promise<void> {
-        if (args[0] == "set_season") {
-            await RiichiDatabase.setCurrentSeasonEnsureExists(args[1]);
-            event.reply(`set season to ${args[1]}`)
-        } else if (args[0] == "add_season") {
-            const season = JSON.parse(args.slice(1).join(' ')) as SeasonEntry;
-            await RiichiDatabase.addSeason(season);
-            event.reply(`added season ${season.display_name}`)
-        } else if (args[0] == "lb") {
+        const is_admin = BotProperties.writeAccess.includes(event.author.id);
+
+        //some hardcoded defaults
+        if (args.length === 0) {
+            args = ["sat"]
+        }
+        if (args.length === 1 && args[0] === "m") {
+            args = ["sat", "m"];
+        }
+
+        if (args.length == 0) {
             const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
-            if (season == null) {
-                throw new Error("current season not set");
-            } else {
-                event.reply(JSON.stringify(await RiichiDatabase.getLeaderboard(0, 20, season.season_id)));
-            }
-        } else if (args[0] == "delete_game") {
-            await RiichiDatabase.deleteGame(args[1]);
-            event.reply(`deleted game ${args[1]}`)
+            event.reply(JSON.stringify(await RiichiDatabase.getLeaderboard(0, 20, season!.season_id)));
         } else if (args[0] == "me") {
             const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
             const [embed, files] = await playerProfileCreator(season!, event.author);
             event.reply({ embeds: [embed], files: files });
+        } else if (args[0] === 'player') {
+            const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
+            const id = args[1].replace(/<@|>/g, "")
+            // check if provided id is comprised of numbers
+            if (!/^\d+$/.test(id)) {
+                throw Error("invalid player id");
+            }
+
+            // Show the profile of the specified player
+            const user = await event.client.users.fetch(id).catch(() => null);
+            if (!user) {
+                throw Error("User not found");
+            }
+            const [embed, files] = await playerProfileCreator(season!, user);
+            event.reply({ embeds: [embed], files: files });
+        } 
+
+
+
+        // 'admin' commands 
+        else if (is_admin && args[0] == "set_season") {
+            await RiichiDatabase.setCurrentSeasonEnsureExists(args[1]);
+            event.reply(`set season to ${args[1]}`)
+        } else if (is_admin && args[0] == "add_season") {
+            const season = JSON.parse(args.slice(1).join(' ')) as SeasonEntry;
+            await RiichiDatabase.addSeason(season);
+            event.reply(`added season ${season.display_name}`)
+        } else if (is_admin && args[0] == "delete_game") {
+            await RiichiDatabase.deleteGame(args[1]);
+            event.reply(`deleted game ${args[1]}`)
+        } else  {
+            const season = await RiichiDatabase.getCurrentSeasonEnsureExists();
+
+            let amount = 100;
+            
+            let headers: Header[] = []
+            // let data = null;
+            let mobile = false;
+
+            const acronyms: Record<string, string> = {
+                "ra": "rank_average",
+                "sat": "score_adj_total",
+                "srt": "score_raw_total",
+                "saa": "score_adj_average",
+                "sra": "score_raw_average",
+                "gt": "game_total"
+            }
+
+            const headerData: Record<string, Header> = {
+                "rank_average": {k: "", l: "Average Rank", t: "number" },
+                "score_adj_total": {k: "", l: "Score (Adjusted)", t: "score" },
+                "score_raw_total": {k: "", l: "Score (Raw)", t: "score" },
+                "score_adj_average": {k: "", l: "Score (Adjusted Average)", t: "score" },
+                "score_raw_average": {k: "", l: "Score (Raw Average)", t: "score" },
+                "game_total": {k: "", l: "Games Played (Total)", t: "number" },
+                "rank_total": {k: "", l: "Rank Total", t: "number" }
+            }
+
+            for (let i = 0; i < args.length; i++) {
+                if (args[i] === 'm') {
+                    mobile = true;
+                } else if (!isNaN(Number(args[i])) && Number.isInteger(Number(args[i]))) {
+                    amount = Number(args[i]);
+                } else if (args[i] in acronyms) {
+                    const key = acronyms[args[i]];
+                    headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+                } else if (args[i] in headerData) {
+                    const key = args[i] as string;
+                    headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+                }
+            }
+
+            // set a default value to sat
+            if (headers.length === 0) {
+                const key = acronyms['sat'];
+                headers.push({ k: key, l: headerData[key].l, t: headerData[key].t });
+            }
+
+            // data = await RiichiDatabase.getPlayerData(amount, headers.map(h => h.k) as playerDataAttr[]);
+            const data = await RiichiDatabase.getLeaderboard(0, 30, season!.season_id);
+            interface LBData {
+                id_player: string,
+                rank: number,
+                score_adj_total: number,
+            }
+            const lbdata: LBData[] = data.map((e, i) => ({
+                "id_player": e.player_id,
+                "rank": i+1,
+                "score_adj_total": e.score/1000.0
+            }))
+
+            if (lbdata) {
+                //Add rank and player headers:
+                //Idk why it doesn't let me do it in one line
+                headers.unshift({k: "id_player", l: "Player", t: "mention"});
+                headers.unshift({k: "rank", l: "Rank", t: "string"});
+                // data.forEach((p,i) => p.rank = `**${i+1}**`);
+
+                const eb = new EmbedManager("Season Leaderboard", event.client);
+                if (mobile) {
+                    eb.addObjectArrayToMobile(headers, lbdata);
+                } else {
+                    eb.addObjectArrayToField(headers, lbdata);
+                }
+                event.reply({ embeds: [eb] });
+            }
         }
+
 
         // //TODO: Handle large amounts of players (don't think it will matter for now)
 
-        // //some hardcoded defaults
-        // if (args.length === 0) {
-        //     args = ["sat"]
-        // }
-
-        // if (args.length === 1 && args[0] === "m") {
-        //     args = ["sat", "m"];
-        // }
+        
 
         // if (args[0] === 'init') {
         //     RiichiDatabase.init();

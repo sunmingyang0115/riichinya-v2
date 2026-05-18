@@ -129,9 +129,10 @@ export class RiichiDatabase {
 
     public static async getPlayerProfile(season_id: string, player_id: string): Promise<PlayerProfile | null> {
         let query = `
+            with LB as (
             select
                 p.player_id,
-                round(sum(p.adj_score), 1) as total_score,
+                sum(p.adj_score) as total_score,
                 sum(p.raw_score) as total_raw_score,
                 max(p.raw_score) as highest_score,
                 min(p.raw_score) as lowest_score,
@@ -140,8 +141,10 @@ export class RiichiDatabase {
                 rank() over (order by sum(p.adj_score) desc) as rank
             from ParticipantTable p
                 inner join GameTable g on p.game_id = g.game_id
-                where g.season_id = ? and p.player_id = ?
+                where g.season_id = ?
             group by p.player_id
+            )
+            select * from LB where player_id = ?
         `;
 
         const db = await this.db.getDB();
