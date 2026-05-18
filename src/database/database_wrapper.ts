@@ -14,6 +14,11 @@ export class DatabaseWrapper {
         this.initDB = initDB;
     }
 
+    public async getDB() {
+        await this.ensureDatabaseExists();
+        return this.db!;
+    }
+
     public async ensureDatabaseExists(): Promise<void> {
         if (!this.db) {
             this.db = await open({
