@@ -100,23 +100,23 @@ export class RiichiDatabase {
         await db.run(updateQuery, [season_id]);
     }
 
-    public static async getLeaderboard(offset: number, limit: number, season_id: string): Promise<LeaderboardEntry[]> {
+    public static async getLeaderboard(offset: number, limit: number, season_id: string | null): Promise<LeaderboardEntry[]> {
         let query = `
             select
                 p.player_id,
                 sum(p.adj_score) as score
             from ParticipantTable p
                 inner join GameTable g on p.game_id = g.game_id
-                where g.season_id = ?
+                where (? is null or g.season_id = ?)
             group by p.player_id
             order by score desc
             limit ? offset ?
         `
         const db = await this.db.getDB();
-        return await db.all<LeaderboardEntry[]>(query, [season_id, limit, offset])
+        return await db.all<LeaderboardEntry[]>(query, [season_id, season_id, limit, offset])
     }   
 
-    public static async getRecentGames(offset: number, limit: number, season_id: string, player_id: string): 
+    public static async getRecentGames(offset: number, limit: number, season_id: string | null, player_id: string): 
         Promise<RecentGameEntry[]>
     {
         let query = `
@@ -127,15 +127,16 @@ export class RiichiDatabase {
                 g.date
             from ParticipantTable p
                 inner join GameTable g on p.game_id = g.game_id
-                where g.season_id = ? and p.player_id = ?
+                where (? is null or g.season_id = ?)
+                    and p.player_id = ?
             order by g.date desc
             limit ? offset ?
         `;
         const db = await this.db.getDB();
-        return await db.all<RecentGameEntry[]>(query, [season_id, player_id, limit, offset]);
+        return await db.all<RecentGameEntry[]>(query, [season_id, season_id, player_id, limit, offset]);
     }
 
-    public static async getPlayerProfile(season_id: string, player_id: string): Promise<PlayerProfile | null> {
+    public static async getPlayerProfile(season_id: string | null, player_id: string): Promise<PlayerProfile | null> {
         let query = `
             with LB as (
             select
@@ -149,18 +150,18 @@ export class RiichiDatabase {
                 rank() over (order by sum(p.adj_score) desc) as rank
             from ParticipantTable p
                 inner join GameTable g on p.game_id = g.game_id
-                where g.season_id = ?
+                where (? is null or g.season_id = ?)
             group by p.player_id
             )
             select * from LB where player_id = ?
         `;
 
         const db = await this.db.getDB();
-        const profile = await db.get<PlayerProfile>(query, [season_id, player_id]);
+        const profile = await db.get<PlayerProfile>(query, [season_id, season_id, player_id]);
         return profile || null;
     }
 
-    public static async getOpponentDelta(offset: number, limit: number, season_id: string, player_id: string): Promise<OpponentDelta[]> {
+    public static async getOpponentDelta(offset: number, limit: number, season_id: string | null, player_id: string): Promise<OpponentDelta[]> {
         let query = `
             select
                 opps.player_id as opponent_id,
@@ -171,7 +172,7 @@ export class RiichiDatabase {
                     on p.game_id = opps.game_id
                 inner join GameTable g
                     on p.game_id = g.game_id
-            where g.season_id = ?
+            where (? is null or g.season_id = ?)
                 and p.player_id = ?
                 and opps.player_id != ?
             group by opps.player_id
@@ -179,7 +180,7 @@ export class RiichiDatabase {
             limit ? offset ?
         `
         const db = await this.db.getDB();
-        return await db.all<OpponentDelta[]>(query, [season_id, player_id, player_id, limit, offset]);
+        return await db.all<OpponentDelta[]>(query, [season_id, season_id, player_id, player_id, limit, offset]);
     }
 
     // // im lazy

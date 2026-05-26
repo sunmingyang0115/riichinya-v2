@@ -4,46 +4,50 @@ import { table } from "table";
 import { generateCombinedSvg } from "../cmds/mjs/charts"
 import { Result } from "../cmds/mjs/common";
 import sharp from "sharp";
-import { SeasonEntry } from "../cmds/riichidb/db_struct";
 
-export async function playerProfileCreator(season: SeasonEntry, user: User): Promise<[EmbedBuilder,{ attachment: string; name: string }[]]> {
+export interface PlayerProfileScope {
+    season_id: string | null;
+    display_name: string;
+}
+
+export async function playerProfileCreator(scope: PlayerProfileScope, user: User): Promise<[EmbedBuilder,{ attachment: string; name: string }[]]> {
     // Fetch player data
     // const [rank, statsArr, games] = await Promise.all([
     //     RiichiDatabase.getPlayerRank(user.id),
     //     RiichiDatabase.getPlayerProfile(user.id),
     //     RiichiDatabase.getPlayerResults(user.id)
     // ]);
-    const profile = await RiichiDatabase.getPlayerProfile(season.season_id, user.id);
-    const recentGames = await RiichiDatabase.getRecentGames(0, 20, season.season_id, user.id);
+    const profile = await RiichiDatabase.getPlayerProfile(scope.season_id, user.id);
+    const recentGames = await RiichiDatabase.getRecentGames(0, 20, scope.season_id, user.id);
     // I love arbitrary limits
-    const opponentDelta = await RiichiDatabase.getOpponentDelta(0, 200, season.season_id, user.id);
+    const opponentDelta = await RiichiDatabase.getOpponentDelta(0, 200, scope.season_id, user.id);
 
     //need to subtract 1 because Result uses 0-index
     const rankResults = recentGames.map(g => g.rank - 1 as Result).reverse();
     const counts = [0, 1, 2, 3].map(n => rankResults.filter(x => x === n).length);
     
     // const opponentStats = await RiichiDatabase.getOpponentDelta(user.id);
-    const percentages = counts.map(count => count / rankResults.length);
-
-    const svg = generateCombinedSvg(rankResults, percentages)
-
-    const imgName = `${user.id}-img.png`;
-    const imgPath = `tmp/${imgName}`;
-
-    await sharp(Buffer.from(svg)).toFile(imgPath);
     const stats = profile;
     const embed = new EmbedBuilder()
-        .setTitle(`${user.username}'s Mahjong Profile`)
+        .setTitle(`${user.username}'s Mahjong Profile (${scope.display_name})`)
         .setThumbnail(user.displayAvatarURL())
         .setColor(0x00bfff)
         .setFooter({ text: `ID: ${user.id}` });
 
-    embed.setImage(`attachment://${imgName}`);
+    const files: { attachment: string; name: string }[] = [];
+    if (rankResults.length > 0) {
+        const percentages = counts.map(count => count / rankResults.length);
+        const svg = generateCombinedSvg(rankResults, percentages)
+        const imgName = `${user.id}-img.png`;
+        const imgPath = `tmp/${imgName}`;
 
-    const files = [{
-        attachment: imgPath,
-        name: imgName,
-    }]
+        await sharp(Buffer.from(svg)).toFile(imgPath);
+        embed.setImage(`attachment://${imgName}`);
+        files.push({
+            attachment: imgPath,
+            name: imgName,
+        });
+    }
 
     const formatAdj = (adj: number) => {
         const val = adj.toFixed(1);
