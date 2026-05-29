@@ -144,7 +144,7 @@ export class InteractionHandler implements EventBuilder {
             // add scores
             await RiichiDatabase.addGame({
                 "game_id": gameid,
-                "date": new Date().toISOString(),
+                "date": interaction.targetMessage.createdAt.toISOString(),
                 "notes": "",
                 "season_id": cur_season.season_id
             })

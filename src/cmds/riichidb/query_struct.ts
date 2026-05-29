@@ -27,3 +27,34 @@ export interface RecentGameEntry {
     date: string;
 };
 
+export interface PlayerComparison {
+    games_played_together: number;
+    player1_adj_total: number;
+    player2_adj_total: number;
+    player1_raw_total: number;
+    player2_raw_total: number;
+    player1_placement_total: number;
+    player2_placement_total: number;
+    player1_wins: number;
+    player2_wins: number;
+    player1_firsts: number;
+    player1_seconds: number;
+    player1_thirds: number;
+    player1_fourths: number;
+    player2_firsts: number;
+    player2_seconds: number;
+    player2_thirds: number;
+    player2_fourths: number;
+};
+
+export interface PlayerComparisonGame {
+    game_id: string;
+    date: string;
+    player1_raw_score: number;
+    player1_adj_score: number;
+    player1_placement: number;
+    player2_raw_score: number;
+    player2_adj_score: number;
+    player2_placement: number;
+};
+

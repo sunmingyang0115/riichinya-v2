@@ -48,7 +48,16 @@ export function parseScoreFromRaw(args : string[], season: SeasonEntry) : GameIn
         players[i].placement = i + 1;
         players[i].uma = uma[i];
     });
-    const grouped = Map.groupBy(players, p => p.score);
+    const grouped = new Map<number, typeof players>();
+    players.forEach(player => {
+        const scoreGroup = grouped.get(player.score);
+        if (scoreGroup) {
+            scoreGroup.push(player);
+        }
+        else {
+            grouped.set(player.score, [player]);
+        }
+    });
     grouped.forEach((v, k) => {
         // find average uma
         const umasToAlloc = v.reduce((acc, e) => acc + e.uma, 0);

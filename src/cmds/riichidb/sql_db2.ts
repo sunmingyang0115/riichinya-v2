@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3'
 import { open, Database } from 'sqlite'
 import { ConfigEntry, GameEntry, ParticipantEntry, SeasonEntry, SQLConfigTable, SQLGameTable, SQLParticipantTable, SQLSeasonTable } from './db_struct';
-import { LeaderboardEntry, OpponentDelta, PlayerProfile, RecentGameEntry } from './query_struct';
+import { LeaderboardEntry, OpponentDelta, PlayerComparison, PlayerComparisonGame, PlayerProfile, RecentGameEntry } from './query_struct';
 import { off } from 'process';
 import { DatabaseWrapper } from '../../database/database_wrapper';
 
@@ -181,6 +181,71 @@ export class RiichiDatabase {
         `
         const db = await this.db.getDB();
         return await db.all<OpponentDelta[]>(query, [season_id, season_id, player_id, player_id, limit, offset]);
+    }
+
+    public static async getPlayerComparison(season_id: string | null, player1_id: string, player2_id: string): Promise<PlayerComparison | null> {
+        const query = `
+            select
+                count(*) as games_played_together,
+                sum(p1.adj_score) as player1_adj_total,
+                sum(p2.adj_score) as player2_adj_total,
+                sum(p1.raw_score) as player1_raw_total,
+                sum(p2.raw_score) as player2_raw_total,
+                sum(p1.placement) as player1_placement_total,
+                sum(p2.placement) as player2_placement_total,
+                sum(case when p1.placement < p2.placement then 1 else 0 end) as player1_wins,
+                sum(case when p2.placement < p1.placement then 1 else 0 end) as player2_wins,
+                sum(case when p1.placement = 1 then 1 else 0 end) as player1_firsts,
+                sum(case when p1.placement = 2 then 1 else 0 end) as player1_seconds,
+                sum(case when p1.placement = 3 then 1 else 0 end) as player1_thirds,
+                sum(case when p1.placement = 4 then 1 else 0 end) as player1_fourths,
+                sum(case when p2.placement = 1 then 1 else 0 end) as player2_firsts,
+                sum(case when p2.placement = 2 then 1 else 0 end) as player2_seconds,
+                sum(case when p2.placement = 3 then 1 else 0 end) as player2_thirds,
+                sum(case when p2.placement = 4 then 1 else 0 end) as player2_fourths
+            from ParticipantTable p1
+                inner join ParticipantTable p2
+                    on p1.game_id = p2.game_id
+                        and p2.player_id = ?
+                inner join GameTable g
+                    on p1.game_id = g.game_id
+            where p1.player_id = ?
+                and (? is null or g.season_id = ?)
+        `;
+
+        const db = await this.db.getDB();
+        const result = await db.get<PlayerComparison>(query, [player2_id, player1_id, season_id, season_id]);
+        if (!result || result.games_played_together === 0) {
+            return null;
+        }
+        return result;
+    }
+
+    public static async getRecentPlayerComparisonGames(season_id: string | null, player1_id: string, player2_id: string, limit: number): Promise<PlayerComparisonGame[]> {
+        const query = `
+            select
+                g.game_id,
+                g.date,
+                p1.raw_score as player1_raw_score,
+                p1.adj_score as player1_adj_score,
+                p1.placement as player1_placement,
+                p2.raw_score as player2_raw_score,
+                p2.adj_score as player2_adj_score,
+                p2.placement as player2_placement
+            from ParticipantTable p1
+                inner join ParticipantTable p2
+                    on p1.game_id = p2.game_id
+                        and p2.player_id = ?
+                inner join GameTable g
+                    on p1.game_id = g.game_id
+            where p1.player_id = ?
+                and (? is null or g.season_id = ?)
+            order by g.date desc
+            limit ?
+        `;
+
+        const db = await this.db.getDB();
+        return await db.all<PlayerComparisonGame[]>(query, [player2_id, player1_id, season_id, season_id, limit]);
     }
 
     // // im lazy

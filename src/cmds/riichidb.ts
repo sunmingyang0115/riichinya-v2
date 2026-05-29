@@ -34,6 +34,9 @@ export class RiichiDbCommand implements CommandBuilder {
             .beginMultiSubCom("player")
             .insertMultiSubCom(ExpectedType.TEXT, "show a player profile by mention or id")
             .back()
+            .beginMultiSubCom("compare")
+            .insertMultiSubCom(ExpectedType.TEXT, "compare shared-game stats for you and one player, or two explicit players")
+            .back()
             .beginMultiSubCom("game")
             .insertMultiSubCom(ExpectedType.DECIMAL, "show game data")
             .back()
@@ -42,6 +45,8 @@ export class RiichiDbCommand implements CommandBuilder {
             .addExampleDoc("ron rdb -s F25_2", "Fall 2025 Split 2 leaderboard", "short season flag")
             .addExampleDoc("ron rdb me -c", "current-season profile", "profile with short current flag")
             .addExampleDoc("ron rdb player @user --season F25_2", "specific player profile", "profile with long season flag")
+            .addExampleDoc("ron rdb compare @user", "compare you and @user", "all shared games by default")
+            .addExampleDoc("ron rdb compare @p1 @p2 -s F25_2", "compare two players", "specific season shared games")
             .build();
     }
 
@@ -80,6 +85,8 @@ export class RiichiDbCommand implements CommandBuilder {
 
             const [embed, files] = await playerProfileCreator(parsed.scope, user);
             await event.reply({ embeds: [embed], files });
+        } else if (args[0] === "compare") {
+            await this.replyWithPlayerComparison(event, args.slice(1));
         } else if (args[0] === "game") {
             const id = this.cleanDiscordId(args[1] ?? "");
             if (!/^\d+$/.test(id)) {
@@ -137,6 +144,113 @@ export class RiichiDbCommand implements CommandBuilder {
 
         const [embed, files] = await playerProfileCreator(parsed.scope, user);
         await event.reply({ embeds: [embed], files });
+    }
+
+    private async replyWithPlayerComparison(event: Message<boolean>, args: string[]): Promise<void> {
+        const parsed = await this.parseSeasonScope(args);
+        let player1Id: string;
+        let player2Id: string;
+
+        if (parsed.args.length === 1) {
+            player1Id = event.author.id;
+            player2Id = this.cleanDiscordId(parsed.args[0]);
+        } else if (parsed.args.length === 2) {
+            player1Id = this.cleanDiscordId(parsed.args[0]);
+            player2Id = this.cleanDiscordId(parsed.args[1]);
+        } else {
+            throw new Error("Usage: `ron rdb compare @player` or `ron rdb compare @player1 @player2`.");
+        }
+
+        if (!/^\d+$/.test(player1Id) || !/^\d+$/.test(player2Id)) {
+            throw new Error("Invalid player id or mention.");
+        }
+        if (player1Id === player2Id) {
+            throw new Error("Choose two different players to compare.");
+        }
+
+        const stats = await RiichiDatabase.getPlayerComparison(parsed.scope.season_id, player1Id, player2Id);
+        const eb = new EmbedManager(`Shared Games (${parsed.scope.display_name})`, event.client);
+        if (stats === null) {
+            eb.addContent(`<@${player1Id}> and <@${player2Id}> have no shared games in this season scope.`);
+            await event.reply({ embeds: [eb] });
+            return;
+        }
+
+        const recentGames = await RiichiDatabase.getRecentPlayerComparisonGames(parsed.scope.season_id, player1Id, player2Id, 5);
+        const games = stats.games_played_together;
+        const formatScore = (score: number) => {
+            const value = (score / 1000).toFixed(1);
+            return score > 0 ? `+${value}` : value;
+        };
+        const formatAverageScore = (score: number) => formatScore(score / games);
+        const formatAverageRaw = (score: number) => (score / games).toFixed(0);
+        const formatAveragePlacement = (placementTotal: number) => (placementTotal / games).toFixed(2);
+
+        eb.addFields(
+            {
+                name: "Summary",
+                value: [
+                    `Shared games: ${games}`,
+                    `Placement wins: <@${player1Id}> ${stats.player1_wins} - ${stats.player2_wins} <@${player2Id}>`,
+                    `Adj delta: ${formatScore(stats.player1_adj_total - stats.player2_adj_total)} for <@${player1Id}>`,
+                ].join("\n"),
+                inline: false,
+            },
+            {
+                name: "Player 1",
+                value: [
+                    `<@${player1Id}>`,
+                    `Adj total: ${formatScore(stats.player1_adj_total)}`,
+                    `Adj avg: ${formatAverageScore(stats.player1_adj_total)}`,
+                    `Raw avg: ${formatAverageRaw(stats.player1_raw_total)}`,
+                    `Avg place: ${formatAveragePlacement(stats.player1_placement_total)}`,
+                    `Placements: ${stats.player1_firsts}/${stats.player1_seconds}/${stats.player1_thirds}/${stats.player1_fourths}`,
+                ].join("\n"),
+                inline: true,
+            },
+            {
+                name: "Player 2",
+                value: [
+                    `<@${player2Id}>`,
+                    `Adj total: ${formatScore(stats.player2_adj_total)}`,
+                    `Adj avg: ${formatAverageScore(stats.player2_adj_total)}`,
+                    `Raw avg: ${formatAverageRaw(stats.player2_raw_total)}`,
+                    `Avg place: ${formatAveragePlacement(stats.player2_placement_total)}`,
+                    `Placements: ${stats.player2_firsts}/${stats.player2_seconds}/${stats.player2_thirds}/${stats.player2_fourths}`,
+                ].join("\n"),
+                inline: true,
+            },
+        );
+
+        if (recentGames.length > 0) {
+            const formatDate = (date: string) => {
+                const d = new Date(date);
+                const month = `${d.getMonth() + 1}`.padStart(2, "0");
+                const day = `${d.getDate()}`.padStart(2, "0");
+                return `${month}/${day}`;
+            };
+            const formatResult = (placement: number, adjScore: number) => `${placement}${this.ordinalSuffix(placement)} ${formatScore(adjScore)}`;
+            const historyRows = [
+                ["Date", "P1", "P2"],
+                ...recentGames.map(game => [
+                    formatDate(game.date),
+                    formatResult(game.player1_placement, game.player1_adj_score),
+                    formatResult(game.player2_placement, game.player2_adj_score),
+                ]),
+            ];
+            const widths = [5, 10, 10];
+            const history = historyRows
+                .map(row => row.map((cell, index) => cell.padEnd(widths[index])).join("  ").trimEnd())
+                .join("\n");
+
+            eb.addFields({
+                name: "Recent Shared Games",
+                value: `\`\`\`\n${history}\n\`\`\``,
+                inline: false,
+            });
+        }
+
+        await event.reply({ embeds: [eb] });
     }
 
     private async replyWithLeaderboard(event: Message<boolean>, args: string[]): Promise<void> {
@@ -294,5 +408,12 @@ export class RiichiDbCommand implements CommandBuilder {
 
     private cleanDiscordId(id: string): string {
         return id.replace(/[<@!>]/g, "");
+    }
+
+    private ordinalSuffix(value: number): string {
+        if (value === 1) return "st";
+        if (value === 2) return "nd";
+        if (value === 3) return "rd";
+        return "th";
     }
 }
