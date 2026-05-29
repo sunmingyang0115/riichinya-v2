@@ -195,59 +195,89 @@ async function readLegacyGames(sourceDb: SqliteDatabase): Promise<LegacyGameRow[
     `);
 }
 
-function legacyGameToParticipants(game: LegacyGameRow): ParticipantRow[] {
-    return [
+function legacyGameToParticipants(game: LegacyGameRow, season: SeasonEntry): ParticipantRow[] {
+    const umas = [season.uma1, season.uma2, season.uma3, season.uma4];
+    const participants = [
         {
             game_id: game.id_game,
             player_id: game.id_player_1,
             raw_score: game.score_raw_1,
-            adj_score: game.score_adj_1,
-            placement: 1,
+            adj_score: 0,
+            placement: 0,
         },
         {
             game_id: game.id_game,
             player_id: game.id_player_2,
             raw_score: game.score_raw_2,
-            adj_score: game.score_adj_2,
-            placement: 2,
+            adj_score: 0,
+            placement: 0,
         },
         {
             game_id: game.id_game,
             player_id: game.id_player_3,
             raw_score: game.score_raw_3,
-            adj_score: game.score_adj_3,
-            placement: 3,
+            adj_score: 0,
+            placement: 0,
         },
         {
             game_id: game.id_game,
             player_id: game.id_player_4,
             raw_score: game.score_raw_4,
-            adj_score: game.score_adj_4,
-            placement: 4,
+            adj_score: 0,
+            placement: 0,
         },
     ];
+
+    participants.sort((a, b) => b.raw_score - a.raw_score);
+
+    for (let i = 0; i < participants.length; i++) {
+        const start = i;
+        const rawScore = participants[i].raw_score;
+        while (i + 1 < participants.length && participants[i + 1].raw_score === rawScore) {
+            i++;
+        }
+
+        const end = i + 1;
+        const placement = start + 1;
+        const umaShare = umas
+            .slice(start, end)
+            .reduce((total, uma) => total + uma, 0) / (end - start);
+
+        for (let j = start; j < end; j++) {
+            participants[j].placement = placement;
+            participants[j].adj_score = participants[j].raw_score - season.target + season.oka + umaShare;
+        }
+    }
+
+    return participants;
 }
 
-async function getSourceTotals(sourceDb: SqliteDatabase): Promise<PlayerTotals[]> {
-    return sourceDb.all<PlayerTotals[]>(`
-        with participants as (
-            select id_player_1 as player_id, score_raw_1 as raw_score, score_adj_1 as adj_score, 1 as placement from DataGame
-            union all
-            select id_player_2, score_raw_2, score_adj_2, 2 from DataGame
-            union all
-            select id_player_3, score_raw_3, score_adj_3, 3 from DataGame
-            union all
-            select id_player_4, score_raw_4, score_adj_4, 4 from DataGame
-        )
-        select player_id,
-               sum(raw_score) as raw_total,
-               sum(adj_score) as adj_total,
-               sum(placement) as placement_total,
-               count(*) as game_total
-        from participants
-        group by player_id
-        order by player_id asc
-    `);
+function getExpectedTotals(games: LegacyGameRow[], seasonBounds: SeasonBounds[]): PlayerTotals[] {
+    const totalsByPlayer = new Map<string, PlayerTotals>();
+
+    for (const game of games) {
+        const season = getSeasonForGame(game, seasonBounds);
+        for (const participant of legacyGameToParticipants(game, season)) {
+            const totals = totalsByPlayer.get(participant.player_id);
+            if (totals) {
+                totals.raw_total += participant.raw_score;
+                totals.adj_total += participant.adj_score;
+                totals.placement_total += participant.placement;
+                totals.game_total++;
+            }
+            else {
+                totalsByPlayer.set(participant.player_id, {
+                    player_id: participant.player_id,
+                    raw_total: participant.raw_score,
+                    adj_total: participant.adj_score,
+                    placement_total: participant.placement,
+                    game_total: 1,
+                });
+            }
+        }
+    }
+
+    return [...totalsByPlayer.values()].sort((a, b) => a.player_id.localeCompare(b.player_id));
 }
 
 async function getTargetTotals(targetDb: SqliteDatabase, gameIds: string[]): Promise<PlayerTotals[]> {
@@ -289,7 +319,7 @@ function compareTotals(expected: PlayerTotals[], actual: PlayerTotals[]): string
             expectedTotals.placement_total !== actualTotals.placement_total ||
             expectedTotals.game_total !== actualTotals.game_total
         ) {
-            messages.push(`${playerId}: source raw=${expectedTotals.raw_total}, adj=${expectedTotals.adj_total}, placements=${expectedTotals.placement_total}, games=${expectedTotals.game_total}; target raw=${actualTotals.raw_total}, adj=${actualTotals.adj_total}, placements=${actualTotals.placement_total}, games=${actualTotals.game_total}`);
+            messages.push(`${playerId}: expected raw=${expectedTotals.raw_total}, adj=${expectedTotals.adj_total}, placements=${expectedTotals.placement_total}, games=${expectedTotals.game_total}; target raw=${actualTotals.raw_total}, adj=${actualTotals.adj_total}, placements=${actualTotals.placement_total}, games=${actualTotals.game_total}`);
         }
     }
 
@@ -375,7 +405,7 @@ async function insertGamesAndParticipants(
             countsBySeason.set(season.season_id, (countsBySeason.get(season.season_id) ?? 0) + 1);
             await gameStmt.run(game.id_game, season.season_id, "", toIsoDate(game.date));
 
-            for (const participant of legacyGameToParticipants(game)) {
+            for (const participant of legacyGameToParticipants(game, season)) {
                 await participantStmt.run(
                     participant.game_id,
                     participant.player_id,
@@ -408,7 +438,7 @@ async function migrate(): Promise<void> {
 
     try {
         const games = await readLegacyGames(sourceDb);
-        const sourceTotals = await getSourceTotals(sourceDb);
+        const expectedTotals = getExpectedTotals(games, seasonBounds);
         const gameIds = games.map(game => game.id_game);
 
         await ensureTargetSchema(targetDb);
@@ -431,7 +461,7 @@ async function migrate(): Promise<void> {
         }
 
         const targetTotals = await getTargetTotals(targetDb, gameIds);
-        const discrepancies = compareTotals(sourceTotals, targetTotals);
+        const discrepancies = compareTotals(expectedTotals, targetTotals);
 
         process.stdout.write(`Migrated ${games.length} games and ${games.length * 4} participants.\n`);
         for (const season of seasons) {
