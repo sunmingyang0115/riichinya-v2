@@ -38,19 +38,30 @@ Current prototype constants:
 ```ts
 participationPoints: 0
 adjustedScoreDivisor: 1000
+basePlacementBonus: [20, 10, 0, -30]
+opponentRankDifferenceMultiplier: 5
 ranks:
-  Novice    threshold 0     placementBonus [20, 10, 0, -10]
-  Adept     threshold 100   placementBonus [20, 10, 0, -20]
-  Expert    threshold 300   placementBonus [20, 10, 0, -30]
-  Master    threshold 600   placementBonus [20, 10, 0, -35]
-  Saint     threshold 1000  placementBonus [20, 10, 0, -40]
-  Celestial threshold 1500  placementBonus [20, 10, 0, -45]
+  Novice    threshold 0
+  Adept     threshold 100
+  Expert    threshold 300
+  Master    threshold 600
+  Saint     threshold 1000
+  Celestial threshold 1500
 ```
 
 Per-player game delta:
 
 ```text
-delta = participationPoints + adjustedScore / adjustedScoreDivisor + placementBonus[currentRank][placement]
+delta = participationPoints + adjustedScore / adjustedScoreDivisor + placementBonus
+```
+
+The base placement bonus is `[+20, +10, +0, -30]`.
+
+For 4th place only, the penalty is adjusted by table difficulty:
+
+```text
+opponentRankDifference = sum(opponentRank - playerRank)
+placementBonus = -30 + opponentRankDifference * 5
 ```
 
 After each game:
@@ -61,7 +72,7 @@ points = max(currentRankFloor, points + delta)
 
 If points meet a higher rank threshold, the player promotes. The new rank becomes permanent and the floor is raised to that rank threshold.
 
-Important: `plan.txt` includes an example with larger placement bonuses such as `[35, 15, -5, rank-based 4th penalty]`, but the actual simulator currently uses `[20, 10, 0, rank-based 4th penalty]`.
+Important: all players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's penalty in the same game.
 
 ## Prototype Details
 
@@ -74,7 +85,7 @@ The bot no longer uses those as its active schema.
 
 The simulator computes placements from raw score order, then uses adjusted score for progression. In the bot's current schema, `placement` is already stored on `ParticipantTable`, so the bot does not need to recompute it for normal use.
 
-The simulator also computes `opponentDifficultyByPlayer`, but that is report-only. It does not affect rank point deltas.
+The simulator also computes `opponentDifficultyByPlayer`. In the bot implementation, this concept now affects the 4th-place penalty through the opponent rank difference formula above.
 
 ## Current Bot Schema
 
@@ -315,8 +326,8 @@ Verification run:
 
 ## Open Decisions
 
-- Final formula: use the simulator constants exactly, or switch to the larger `[35, 15, -5, penalty]` example from `plan.txt`.
-- Whether to include opponent difficulty as an informational column later. It is not part of the progression formula.
+- Final formula: use `[20, 10, 0, -30]` as the base placement bonus, with opponent-rank adjustment applied to 4th place only.
+- Whether to include opponent difficulty as an informational column later. The 4th-place formula already uses it; this would only be for display.
 - Whether to add Discord roles for lifetime ranks. This is mentioned in `plan.txt` but is not required for the first bot implementation.
 - Whether the formula should be treated as mutable while testing, or locked once published. The current implementation recomputes from history, so formula changes are retroactive.
 

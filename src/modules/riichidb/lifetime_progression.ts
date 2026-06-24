@@ -3,7 +3,6 @@ import { LifetimeGameResultRow } from "./query_struct";
 export interface LifetimeRankRule {
     name: string;
     threshold: number;
-    placementBonus: [number, number, number, number];
 }
 
 export interface LifetimePlayerState {
@@ -35,13 +34,15 @@ interface MutableLifetimePlayerState {
 export const lifetimeRules = {
     participationPoints: 0,
     adjustedScoreDivisor: 1000,
+    basePlacementBonus: [20, 10, 0, -30] satisfies [number, number, number, number],
+    opponentRankDifferenceMultiplier: 5,
     ranks: [
-        { name: "Novice", threshold: 0, placementBonus: [20, 10, 0, -10] },
-        { name: "Adept", threshold: 100, placementBonus: [20, 10, 0, -20] },
-        { name: "Expert", threshold: 300, placementBonus: [20, 10, 0, -30] },
-        { name: "Master", threshold: 600, placementBonus: [20, 10, 0, -35] },
-        { name: "Saint", threshold: 1000, placementBonus: [20, 10, 0, -40] },
-        { name: "Celestial", threshold: 1500, placementBonus: [20, 10, 0, -45] },
+        { name: "Novice", threshold: 0 },
+        { name: "Adept", threshold: 100 },
+        { name: "Expert", threshold: 300 },
+        { name: "Master", threshold: 600 },
+        { name: "Saint", threshold: 1000 },
+        { name: "Celestial", threshold: 1500 },
     ] satisfies LifetimeRankRule[],
 };
 
@@ -89,10 +90,30 @@ function getPlayer(players: Map<string, MutableLifetimePlayerState>, playerId: s
     return player;
 }
 
-function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow): void {
-    const rankRule = lifetimeRules.ranks[player.rank - 1];
-    const placementBonus = rankRule.placementBonus[result.placement - 1];
+interface LifetimeGamePlayerSnapshot {
+    result: LifetimeGameResultRow;
+    player: MutableLifetimePlayerState;
+    rank: number;
+}
 
+function getPlacementBonus(player: LifetimeGamePlayerSnapshot, table: LifetimeGamePlayerSnapshot[]): number {
+    const basePlacementBonus = lifetimeRules.basePlacementBonus[player.result.placement - 1];
+    if (basePlacementBonus === undefined) {
+        throw new Error(`Invalid placement ${player.result.placement} in game ${player.result.game_id} for player ${player.result.player_id}.`);
+    }
+
+    if (player.result.placement !== 4) {
+        return basePlacementBonus;
+    }
+
+    const opponentRankDifference = table
+        .filter(opponent => opponent.result.player_id !== player.result.player_id)
+        .reduce((sum, opponent) => sum + opponent.rank - player.rank, 0);
+
+    return basePlacementBonus + opponentRankDifference * lifetimeRules.opponentRankDifferenceMultiplier;
+}
+
+function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow, placementBonus: number): void {
     if (placementBonus === undefined) {
         throw new Error(`Invalid placement ${result.placement} in game ${result.game_id} for player ${result.player_id}.`);
     }
@@ -113,6 +134,22 @@ function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeG
     }
 }
 
+function applyLifetimeGameTable(players: Map<string, MutableLifetimePlayerState>, results: LifetimeGameResultRow[]): void {
+    const table = results.map(result => {
+        const player = getPlayer(players, result.player_id);
+        return {
+            result,
+            player,
+            rank: player.rank,
+        };
+    });
+
+    const placements = new Map(table.map(player => [player.result.player_id, getPlacementBonus(player, table)]));
+    for (const player of table) {
+        applyLifetimeGame(player.player, player.result, placements.get(player.result.player_id)!);
+    }
+}
+
 function finalizePlayer(player: MutableLifetimePlayerState): LifetimePlayerState {
     return {
         ...player,
@@ -125,10 +162,24 @@ function finalizePlayer(player: MutableLifetimePlayerState): LifetimePlayerState
 
 export function calculateLifetimeProgression(results: LifetimeGameResultRow[]): LifetimePlayerState[] {
     const players = new Map<string, MutableLifetimePlayerState>();
+    let currentGameId: string | null = null;
+    let currentGameResults: LifetimeGameResultRow[] = [];
+
+    const flushGame = () => {
+        if (currentGameResults.length > 0) {
+            applyLifetimeGameTable(players, currentGameResults);
+            currentGameResults = [];
+        }
+    };
 
     for (const result of results) {
-        applyLifetimeGame(getPlayer(players, result.player_id), result);
+        if (currentGameId !== null && result.game_id !== currentGameId) {
+            flushGame();
+        }
+        currentGameId = result.game_id;
+        currentGameResults.push(result);
     }
+    flushGame();
 
     return [...players.values()]
         .map(finalizePlayer)
