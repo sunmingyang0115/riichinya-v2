@@ -1,6 +1,5 @@
 import { EmbedBuilder, Client } from "discord.js";
-import { CommandBuilder } from "./cmd_manager";
-import { MJS_ERROR_TYPE } from "../cmds/mjs/common";
+import { MJS_ERROR_TYPE } from "../modules/mjs/common";
 
 export type Header = {
     /** key: the property name in the data object */
@@ -88,6 +87,10 @@ export class EmbedManager extends EmbedBuilder {
             return date.toDateString();
         } else if (type === "score") {
             return Number(t).toFixed(1);
+        } else if (type === "decimal") {
+            return Number(t).toFixed(2);
+        } else if (type === "integer") {
+            return Number(t).toFixed(0);
         }
         return t;
     }
