@@ -3,6 +3,7 @@ import { LifetimeGameResultRow } from "./query_struct";
 export interface LifetimeRankRule {
     name: string;
     threshold: number;
+    color: number;
 }
 
 export interface LifetimePlayerState {
@@ -37,12 +38,12 @@ export const lifetimeRules = {
     basePlacementBonus: [20, 10, 0, -30] satisfies [number, number, number, number],
     opponentRankDifferenceMultiplier: 5,
     ranks: [
-        { name: "Novice", threshold: 0 },
-        { name: "Adept", threshold: 100 },
-        { name: "Expert", threshold: 300 },
-        { name: "Master", threshold: 600 },
-        { name: "Saint", threshold: 1000 },
-        { name: "Celestial", threshold: 1500 },
+        { name: "Novice", threshold: 0, color: 0x9acd32 },
+        { name: "Adept", threshold: 100, color: 0x15803d },
+        { name: "Expert", threshold: 300, color: 0xd4a017 },
+        { name: "Master", threshold: 600, color: 0xc66a2b },
+        { name: "Saint", threshold: 1000, color: 0xd94a73 },
+        { name: "Celestial", threshold: 1500, color: 0x38bdf8 },
     ] satisfies LifetimeRankRule[],
 };
 
@@ -52,6 +53,10 @@ export function getLifetimeRankName(rank: number): string {
 
 export function getLifetimeNextRankThreshold(rank: number): number | null {
     return lifetimeRules.ranks[rank]?.threshold ?? null;
+}
+
+export function getLifetimeRankColor(rank: number): number {
+    return lifetimeRules.ranks[rank - 1]?.color ?? lifetimeRules.ranks[0].color;
 }
 
 function rankFloor(rank: number): number {
@@ -97,12 +102,21 @@ interface LifetimeGamePlayerSnapshot {
 }
 
 function getPlacementBonus(player: LifetimeGamePlayerSnapshot, table: LifetimeGamePlayerSnapshot[]): number {
-    const basePlacementBonus = lifetimeRules.basePlacementBonus[player.result.placement - 1];
+    const tiedPlayers = table.filter(other => other.result.raw_score === player.result.raw_score);
+    const placementBonuses = tiedPlayers.map((_, index) =>
+        getPlacementBonusForPlace(player, table, player.result.placement + index)
+    );
+
+    return placementBonuses.reduce((sum, bonus) => sum + bonus, 0) / placementBonuses.length;
+}
+
+function getPlacementBonusForPlace(player: LifetimeGamePlayerSnapshot, table: LifetimeGamePlayerSnapshot[], placement: number): number {
+    const basePlacementBonus = lifetimeRules.basePlacementBonus[placement - 1];
     if (basePlacementBonus === undefined) {
-        throw new Error(`Invalid placement ${player.result.placement} in game ${player.result.game_id} for player ${player.result.player_id}.`);
+        throw new Error(`Invalid placement ${placement} in game ${player.result.game_id} for player ${player.result.player_id}.`);
     }
 
-    if (player.result.placement !== 4) {
+    if (placement !== 4) {
         return basePlacementBonus;
     }
 

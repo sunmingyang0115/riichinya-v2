@@ -255,15 +255,16 @@ export class RDBModule implements BotModule {
             const before = beforeStandings.get(player.id);
             const after = afterStandings.get(player.id);
             const leagueRank = after
-                ? before && before.rank !== after.rank
-                    ? `#${before.rank} -> #${after.rank}`
-                    : `#${after.rank}`
+                ? before
+                    ? before.rank !== after.rank
+                        ? `#${before.rank} -> #${after.rank}`
+                        : `#${after.rank}`
+                    : `N/A -> #${after.rank}`
                 : "N/A";
             const leagueTotal = after ? this.formatSignedFixed(after.score_adj_total, 1) : "N/A";
 
-            return `${player.placement} <@${player.id}> ${this.formatSignedFixed(player.scoreAdj / 1000, 1)} | ${leagueRank} | ${leagueTotal}`;
+            return `${player.placement}${this.ordinalSuffix(player.placement)} <@${player.id}> | ${this.formatSignedFixed(player.scoreAdj / 1000, 1)} | ${leagueRank} | total ${leagueTotal}`;
         });
-
         eb.addContent(lines.join("\n"));
         return eb;
     }

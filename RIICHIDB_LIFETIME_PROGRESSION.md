@@ -64,6 +64,23 @@ opponentRankDifference = sum(opponentRank - playerRank)
 placementBonus = -30 + opponentRankDifference * 5
 ```
 
+For tied placements, progression bonuses are split across the occupied placement slots the same way uma is split:
+
+```text
+tieBonus = average(each occupied placement bonus)
+```
+
+Examples:
+
+- Two players tied for 1st occupy 1st and 2nd, so both get `(20 + 10) / 2 = 15`.
+- Two players tied for 2nd occupy 2nd and 3rd, so both get `(10 + 0) / 2 = 5`.
+- Two players tied for 3rd occupy 3rd and 4th, so each gets `(0 + their own adjusted 4th penalty) / 2`.
+- Three players tied for 1st occupy 1st, 2nd, and 3rd, so all get `(20 + 10 + 0) / 3 = 10`.
+- Three players tied for 2nd occupy 2nd, 3rd, and 4th, so each gets `(10 + 0 + their own adjusted 4th penalty) / 3`.
+- Four players tied occupy 1st, 2nd, 3rd, and 4th, so each gets `(20 + 10 + 0 + their own adjusted 4th penalty) / 4`.
+
+The adjusted 4th penalty is still player-specific, so tied players can receive different progression bonuses when the tie includes 4th place.
+
 After each game:
 
 ```text

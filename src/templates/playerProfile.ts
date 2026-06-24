@@ -4,6 +4,7 @@ import { table } from "table";
 import { generateCombinedSvg } from "../modules/mjs/charts"
 import { Result } from "../modules/mjs/common";
 import sharp from "sharp";
+import { getLifetimeRankColor } from "../modules/riichidb/lifetime_progression";
 
 export interface PlayerProfileScope {
     season_id: string | null;
@@ -34,7 +35,7 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
     const embed = new EmbedBuilder()
         .setTitle(`${user.username}'s Mahjong Profile (${scope.display_name})`)
         .setThumbnail(user.displayAvatarURL())
-        .setColor(0x00bfff)
+        .setColor(lifetimeRank ? getLifetimeRankColor(lifetimeRank.rank) : 0x00bfff)
         .setFooter({ text: `ID: ${user.id}` });
 
     const files: { attachment: string; name: string }[] = [];
