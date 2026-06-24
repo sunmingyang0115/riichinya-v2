@@ -505,7 +505,7 @@ export class RDBModule implements BotModule {
             return;
         }
 
-        const header = "No. | Player | Pts | G | Adj Avg | Avg Pl";
+        const header = "No. | Player | Pts";
         const chunks = this.formatLifetimeRankChunks(data, header, MAX_EMBED_DESCRIPTION_LENGTH);
         const embeds = chunks.map((chunk, index) =>
             new EmbedManager(index === 0 ? title : `${title} (${index + 1})`, event.client).addContent(chunk)
@@ -741,7 +741,7 @@ export class RDBModule implements BotModule {
 
         players.forEach((player, index) => {
             if (player.rank_name !== previousRank) {
-                appendLine(player.rank_name);
+                appendLine(`**${player.rank_name}** (${this.formatLifetimeRankRange(player)})`);
                 previousRank = player.rank_name;
             }
 
@@ -749,9 +749,6 @@ export class RDBModule implements BotModule {
                 String(index + 1),
                 `<@${player.player_id}>`,
                 this.formatLifetimePoints(player.points),
-                String(player.games),
-                this.formatSignedFixed(player.score_adj_average, 1),
-                player.rank_average.toFixed(2),
             ].join(" | "), player.rank_name);
         });
 
@@ -760,6 +757,14 @@ export class RDBModule implements BotModule {
         }
 
         return chunks;
+    }
+
+    private formatLifetimeRankRange(player: LifetimePlayerState): string {
+        const floor = this.formatLifetimePoints(player.floor);
+        if (player.next_rank_threshold === null) {
+            return `${floor}+ pts`;
+        }
+        return `${floor}-${player.next_rank_threshold} pts`;
     }
 
     private formatSignedFixed(value: number, digits: number): string {
