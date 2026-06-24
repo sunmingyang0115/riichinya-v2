@@ -17,10 +17,13 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
     //     RiichiDatabase.getPlayerProfile(user.id),
     //     RiichiDatabase.getPlayerResults(user.id)
     // ]);
-    const profile = await RiichiDatabase.getPlayerProfile(scope.season_id, user.id);
-    const recentGames = await RiichiDatabase.getRecentGames(0, 20, scope.season_id, user.id);
-    // I love arbitrary limits
-    const opponentDelta = await RiichiDatabase.getOpponentDelta(0, 200, scope.season_id, user.id);
+    const [profile, recentGames, opponentDelta, lifetimeRank] = await Promise.all([
+        RiichiDatabase.getPlayerProfile(scope.season_id, user.id),
+        RiichiDatabase.getRecentGames(0, 20, scope.season_id, user.id),
+        // I love arbitrary limits
+        RiichiDatabase.getOpponentDelta(0, 200, scope.season_id, user.id),
+        RiichiDatabase.getLifetimePlayer(user.id),
+    ]);
 
     //need to subtract 1 because Result uses 0-index
     const rankResults = recentGames.map(g => g.rank - 1 as Result).reverse();
@@ -53,6 +56,12 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
         const val = adj.toFixed(1);
         return adj > 0 ? `+${val}` : val;
     };
+    const formatLifetimePoints = (points: number) => points.toFixed(1).replace(/\.0$/, "");
+    const lifetimeRankValue = lifetimeRank
+        ? lifetimeRank.next_rank_threshold === null
+            ? `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} pts`
+            : `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} / ${lifetimeRank.next_rank_threshold} pts`
+        : "Unranked";
     // Add stats
     if (stats) {
         // Calculate averages from available fields
@@ -60,15 +69,18 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
         const adjAvg = stats.games_played > 0 ? (stats.total_score / 1000.0 / stats.games_played) : 0;
         const rawAvg = stats.games_played > 0 ? (stats.total_raw_score / 1000.0 / stats.games_played) : 0;
         embed.addFields(
-            { name: "Rank", value: `${stats.rank}`, inline: true},
-            { name: "Avg. Placement", value: `${avgPlacement.toFixed(1)}`, inline: true },
+            { name: "Lifetime Rank", value: lifetimeRankValue, inline: true },
+            { name: "Leaderboard Rank", value: `${stats.rank}`, inline: true},
             { name: "Total Games", value: `${stats.games_played}`, inline: true },
-            { name: "\t", value: "\t"},
+            { name: "Avg. Placement", value: `${avgPlacement.toFixed(1)}`, inline: true },
             { name: "Adj. Score (Avg)", value: `${adjAvg.toFixed(1)}`, inline: true },
             { name: "Raw Score (Avg)", value: `${(rawAvg * 1000).toFixed(0)}`, inline: true }
         );
     } else {
-        embed.setDescription("No stats found for this player.");
+        embed.setDescription("No stats found for this season scope.");
+        if (lifetimeRank) {
+            embed.addFields({ name: "Lifetime Rank", value: lifetimeRankValue, inline: true });
+        }
     }
     // Game history (show up to 5 most recent) as a table
     if (recentGames && recentGames.length > 0) {

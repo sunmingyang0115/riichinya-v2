@@ -1,9 +1,10 @@
 import sqlite3 from 'sqlite3'
 import { open, Database } from 'sqlite'
 import { ConfigEntry, GameEntry, ParticipantEntry, SeasonEntry, SQLConfigTable, SQLGameTable, SQLParticipantTable, SQLSeasonTable } from './db_struct';
-import { LeaderboardEntry, LeaderboardStatKey, OpponentDelta, PlayerComparison, PlayerComparisonGame, PlayerGameCount, PlayerProfile, RecentGameEntry } from './query_struct';
+import { LeaderboardEntry, LeaderboardStatKey, LifetimeGameResultRow, OpponentDelta, PlayerComparison, PlayerComparisonGame, PlayerGameCount, PlayerProfile, RecentGameEntry, SeasonAdjustedStanding } from './query_struct';
 import { off } from 'process';
 import { DatabaseWrapper } from '../../database/database_wrapper';
+import { calculateLifetimeProgression, LifetimePlayerState } from './lifetime_progression';
 
 export class RiichiDatabase {
     private static db: DatabaseWrapper = new DatabaseWrapper("rdb2.sql", e => this.init(e));
@@ -71,6 +72,34 @@ export class RiichiDatabase {
         return await db.all<ParticipantEntry[]>(query, [game_id]);
     }
 
+    public static async getLifetimeGameResults(): Promise<LifetimeGameResultRow[]> {
+        const query = `
+            select
+                g.game_id,
+                g.date,
+                p.player_id,
+                p.raw_score,
+                p.adj_score,
+                p.placement
+            from GameTable g
+                inner join ParticipantTable p on g.game_id = p.game_id
+            where substr(g.season_id, -2) != '_L'
+            order by g.date asc, g.game_id asc, p.player_id asc
+        `;
+        const db = await this.db.getDB();
+        return await db.all<LifetimeGameResultRow[]>(query);
+    }
+
+    public static async getLifetimeLeaderboard(offset: number, limit: number): Promise<LifetimePlayerState[]> {
+        const results = await this.getLifetimeGameResults();
+        return calculateLifetimeProgression(results).slice(offset, offset + limit);
+    }
+
+    public static async getLifetimePlayer(player_id: string): Promise<LifetimePlayerState | null> {
+        const results = await this.getLifetimeGameResults();
+        return calculateLifetimeProgression(results).find(player => player.player_id === player_id) ?? null;
+    }
+
     public static async getCurrentSeasonEnsureExists(): Promise<SeasonEntry | null> {
         return await this.getSeasonConfigEnsureExists(this.CURRENT_SEASON_CONFIG_KEY);
     }
@@ -125,6 +154,24 @@ export class RiichiDatabase {
             on conflict(key) do update set value = excluded.value
         `;
         await db.run(updateQuery, [key, season_id]);
+    }
+
+    public static async getSeasonAdjustedStandings(season_id: string): Promise<SeasonAdjustedStanding[]> {
+        const query = `
+            with standings as (
+                select
+                    p.player_id,
+                    sum(p.adj_score) / 1000.0 as score_adj_total,
+                    row_number() over (order by sum(p.adj_score) desc, p.player_id asc) as rank
+                from ParticipantTable p
+                    inner join GameTable g on p.game_id = g.game_id
+                where g.season_id = ?
+                group by p.player_id
+            )
+            select * from standings order by rank asc
+        `;
+        const db = await this.db.getDB();
+        return await db.all<SeasonAdjustedStanding[]>(query, [season_id]);
     }
 
     public static async getLeaderboard(
