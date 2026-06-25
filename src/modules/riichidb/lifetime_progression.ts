@@ -4,6 +4,7 @@ export interface LifetimeRankRule {
     name: string;
     threshold: number;
     color: number;
+    iconFile: string;
 }
 
 export interface LifetimePlayerState {
@@ -38,12 +39,12 @@ export const lifetimeRules = {
     basePlacementBonus: [20, 10, 0, -30] satisfies [number, number, number, number],
     opponentRankDifferenceMultiplier: 5,
     ranks: [
-        { name: "Novice", threshold: 0, color: 0x9acd32 },
-        { name: "Adept", threshold: 100, color: 0x15803d },
-        { name: "Expert", threshold: 300, color: 0xd4a017 },
-        { name: "Master", threshold: 600, color: 0xc66a2b },
-        { name: "Saint", threshold: 1000, color: 0xd94a73 },
-        { name: "Celestial", threshold: 1500, color: 0x38bdf8 },
+        { name: "Novice", threshold: 0, color: 0x9acd32, iconFile: "Novice.png" },
+        { name: "Adept", threshold: 100, color: 0x15803d, iconFile: "Intermediate.png" },
+        { name: "Expert", threshold: 300, color: 0xd4a017, iconFile: "Expert.png" },
+        { name: "Master", threshold: 600, color: 0xc66a2b, iconFile: "Master.png" },
+        { name: "Saint", threshold: 1000, color: 0xd94a73, iconFile: "Saint.png" },
+        { name: "Celestial", threshold: 1500, color: 0x38bdf8, iconFile: "Celestial.png" },
     ] satisfies LifetimeRankRule[],
 };
 
@@ -57,6 +58,10 @@ export function getLifetimeNextRankThreshold(rank: number): number | null {
 
 export function getLifetimeRankColor(rank: number): number {
     return lifetimeRules.ranks[rank - 1]?.color ?? lifetimeRules.ranks[0].color;
+}
+
+export function getLifetimeRankIconFile(rank: number): string {
+    return lifetimeRules.ranks[rank - 1]?.iconFile ?? lifetimeRules.ranks[0].iconFile;
 }
 
 function rankFloor(rank: number): number {
