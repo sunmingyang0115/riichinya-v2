@@ -1,8 +1,23 @@
 import { LifetimeGameResultRow } from "./query_struct";
 
+interface LifetimeGameResultLike {
+    game_id: string;
+    player_id: string;
+    raw_score: number;
+    placement: number;
+    target: number;
+    oka: number;
+}
+
+export interface LifetimeGameDeltaInput extends LifetimeGameResultLike {
+    rank: number;
+}
+
 export interface LifetimeRankRule {
     name: string;
-    threshold: number;
+    start: number;
+    limit: number | null;
+    demotePoints: number | null;
     color: number;
     iconFile: string;
 }
@@ -12,8 +27,9 @@ export interface LifetimePlayerState {
     rank: number;
     rank_name: string;
     points: number;
-    next_rank_threshold: number | null;
-    floor: number;
+    rank_start: number;
+    rank_limit: number | null;
+    demote_points: number | null;
     games: number;
     total_adjusted_score: number;
     total_placement: number;
@@ -26,7 +42,6 @@ interface MutableLifetimePlayerState {
     player_id: string;
     rank: number;
     points: number;
-    floor: number;
     games: number;
     total_adjusted_score: number;
     total_placement: number;
@@ -41,41 +56,30 @@ export const lifetimeRules = {
     opponentRankDifferenceMultiplier: 0.5,
     rankParticipationBonus: [10, 5, 0, 0, 0, 0] satisfies number[],
     ranks: [
-        { name: "Novice", threshold: 0, color: 0x9acd32, iconFile: "Novice.png" },
-        { name: "Adept", threshold: 100, color: 0x15803d, iconFile: "Intermediate.png" },
-        { name: "Expert", threshold: 250, color: 0xd4a017, iconFile: "Expert.png" },
-        { name: "Master", threshold: 500, color: 0xc66a2b, iconFile: "Master.png" },
-        { name: "Saint", threshold: 800, color: 0xd94a73, iconFile: "Saint.png" },
-        { name: "Celestial", threshold: 1200, color: 0x38bdf8, iconFile: "Celestial.png" },
+        { name: "Novice", start: 0, limit: 100, demotePoints: null, color: 0x9acd32, iconFile: "Novice.png" },
+        { name: "Adept", start: 150, limit: 300, demotePoints: 0, color: 0x15803d, iconFile: "Intermediate.png" },
+        { name: "Expert", start: 200, limit: 400, demotePoints: 100, color: 0xd4a017, iconFile: "Expert.png" },
+        { name: "Master", start: 250, limit: 500, demotePoints: 150, color: 0xc66a2b, iconFile: "Master.png" },
+        { name: "Saint", start: 300, limit: 600, demotePoints: 200, color: 0xd94a73, iconFile: "Saint.png" },
+        { name: "Celestial", start: 350, limit: null, demotePoints: 250, color: 0x38bdf8, iconFile: "Celestial.png" },
     ] satisfies LifetimeRankRule[],
 };
 
-export function getLifetimeRankName(rank: number): string {
-    return lifetimeRules.ranks[rank - 1]?.name ?? lifetimeRules.ranks[lifetimeRules.ranks.length - 1].name;
+function getLifetimeRankRule(rank: number): LifetimeRankRule {
+    const index = Math.max(0, Math.min(rank - 1, lifetimeRules.ranks.length - 1));
+    return lifetimeRules.ranks[index];
 }
 
-export function getLifetimeNextRankThreshold(rank: number): number | null {
-    return lifetimeRules.ranks[rank]?.threshold ?? null;
+export function getLifetimeRankName(rank: number): string {
+    return getLifetimeRankRule(rank).name;
 }
 
 export function getLifetimeRankColor(rank: number): number {
-    return lifetimeRules.ranks[rank - 1]?.color ?? lifetimeRules.ranks[0].color;
+    return getLifetimeRankRule(rank).color;
 }
 
 export function getLifetimeRankIconFile(rank: number): string {
-    return lifetimeRules.ranks[rank - 1]?.iconFile ?? lifetimeRules.ranks[0].iconFile;
-}
-
-function rankForPoints(points: number): number {
-    let rank = 1;
-
-    for (let i = 0; i < lifetimeRules.ranks.length; i++) {
-        if (points >= lifetimeRules.ranks[i].threshold) {
-            rank = i + 1;
-        }
-    }
-
-    return rank;
+    return getLifetimeRankRule(rank).iconFile;
 }
 
 function getPlayer(players: Map<string, MutableLifetimePlayerState>, playerId: string): MutableLifetimePlayerState {
@@ -88,7 +92,6 @@ function getPlayer(players: Map<string, MutableLifetimePlayerState>, playerId: s
         player_id: playerId,
         rank: 1,
         points: 0,
-        floor: 0,
         games: 0,
         total_adjusted_score: 0,
         total_placement: 0,
@@ -99,8 +102,8 @@ function getPlayer(players: Map<string, MutableLifetimePlayerState>, playerId: s
 }
 
 interface LifetimeGamePlayerSnapshot {
-    result: LifetimeGameResultRow;
-    player: MutableLifetimePlayerState;
+    result: LifetimeGameResultLike;
+    player?: MutableLifetimePlayerState;
     rank: number;
 }
 
@@ -130,25 +133,51 @@ function getRankParticipationBonus(rank: number): number {
     return lifetimeRules.rankParticipationBonus[rank - 1] ?? 0;
 }
 
-function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow, progressionBonus: number): void {
-    if (progressionBonus === undefined) {
-        throw new Error(`Invalid placement ${result.placement} in game ${result.game_id} for player ${result.player_id}.`);
+function getLifetimeGameDelta(player: LifetimeGamePlayerSnapshot, table: LifetimeGamePlayerSnapshot[]): number {
+    const scoreMovement = (player.result.raw_score - player.result.target + player.result.oka) / lifetimeRules.rawScoreDivisor;
+    return scoreMovement + getPlacementBonus(player, table) + getRankParticipationBonus(player.rank);
+}
+
+export function calculateLifetimeGameDeltas(results: LifetimeGameDeltaInput[]): Map<string, number> {
+    const table = results.map(result => ({
+        result,
+        rank: result.rank,
+    }));
+
+    return new Map(table.map(player => [player.result.player_id, getLifetimeGameDelta(player, table)]));
+}
+
+function applyRankTransition(player: MutableLifetimePlayerState): void {
+    const rankRule = getLifetimeRankRule(player.rank);
+
+    if (rankRule.limit !== null && player.points >= rankRule.limit) {
+        player.rank += 1;
+        player.points = getLifetimeRankRule(player.rank).start;
+        player.promotions += 1;
+        return;
     }
 
-    const scoreMovement = (result.raw_score - result.target + result.oka) / lifetimeRules.rawScoreDivisor;
-    const delta = scoreMovement + progressionBonus;
+    if (player.points <= MIN_LIFETIME_POINTS) {
+        if (player.rank === 1) {
+            player.points = MIN_LIFETIME_POINTS;
+            return;
+        }
+
+        player.rank -= 1;
+        player.points = rankRule.demotePoints ?? MIN_LIFETIME_POINTS;
+    }
+}
+
+function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow, delta: number): void {
+    if (delta === undefined) {
+        throw new Error(`Invalid placement ${result.placement} in game ${result.game_id} for player ${result.player_id}.`);
+    }
 
     player.games += 1;
     player.total_adjusted_score += result.adj_score;
     player.total_placement += result.placement;
-    player.points = Math.max(MIN_LIFETIME_POINTS, player.points + delta);
-
-    const nextRank = rankForPoints(player.points);
-    if (nextRank > player.rank) {
-        player.promotions += 1;
-    }
-    player.rank = nextRank;
-    player.floor = MIN_LIFETIME_POINTS;
+    player.points += delta;
+    applyRankTransition(player);
 }
 
 function applyLifetimeGameTable(players: Map<string, MutableLifetimePlayerState>, results: LifetimeGameResultRow[]): void {
@@ -161,20 +190,20 @@ function applyLifetimeGameTable(players: Map<string, MutableLifetimePlayerState>
         };
     });
 
-    const placements = new Map(table.map(player => [
-        player.result.player_id,
-        getPlacementBonus(player, table) + getRankParticipationBonus(player.rank),
-    ]));
+    const deltas = new Map(table.map(player => [player.result.player_id, getLifetimeGameDelta(player, table)]));
     for (const player of table) {
-        applyLifetimeGame(player.player, player.result, placements.get(player.result.player_id)!);
+        applyLifetimeGame(player.player, player.result, deltas.get(player.result.player_id)!);
     }
 }
 
 function finalizePlayer(player: MutableLifetimePlayerState): LifetimePlayerState {
+    const rankRule = getLifetimeRankRule(player.rank);
     return {
         ...player,
-        rank_name: getLifetimeRankName(player.rank),
-        next_rank_threshold: getLifetimeNextRankThreshold(player.rank),
+        rank_name: rankRule.name,
+        rank_start: rankRule.start,
+        rank_limit: rankRule.limit,
+        demote_points: rankRule.demotePoints,
         score_adj_average: player.games === 0 ? 0 : player.total_adjusted_score / 1000 / player.games,
         rank_average: player.games === 0 ? 0 : player.total_placement / player.games,
     };

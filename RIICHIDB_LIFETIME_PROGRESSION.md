@@ -55,7 +55,7 @@ Lifetime progression currently counts regular games and excludes league seasons 
 
 ## Current Implemented Formula
 
-The current implementation is a cumulative progression system with a zero-point floor.
+The current implementation is a Mahjong Soul-style rank-local progression system.
 
 Current constants:
 
@@ -65,12 +65,13 @@ basePlacementBonus: [30, 10, -10, -30]
 opponentRankDifferenceMultiplier: 0.5
 rankParticipationBonus: [10, 5, 0, 0, 0, 0]
 ranks:
-  Novice    threshold 0
-  Adept     threshold 100
-  Expert    threshold 300
-  Master    threshold 600
-  Saint     threshold 1000
-  Celestial threshold 1500
+  Rank       Start  Limit  Demote
+  Novice     0      100    N/A
+  Adept      150    300    0
+  Expert     200    400    100
+  Master     250    500    150
+  Saint      300    600    200
+  Celestial  350    N/A    250
 ```
 
 Per-player game delta:
@@ -184,10 +185,20 @@ This intentionally makes lifetime progression slightly positive-sum in early ran
 After each game:
 
 ```text
-points = max(0, points + delta)
+rankPoints = rankPoints + delta
 ```
 
-The rank shown is based on the player's current points. Promotion thresholds are not permanent floors, so players can drop to a lower rank if their points fall below that rank's threshold.
+Promotion and demotion use rank-local points:
+
+- New players start at `0/100` in Novice.
+- Reaching the current rank's limit promotes to the next rank's start value.
+- Reaching `100/100` in Novice promotes to `150/300` in Adept.
+- Reaching `300/300` in Adept promotes to `200/400` in Expert.
+- Dropping to `0/300` in Adept demotes to `0/100` in Novice.
+- Dropping to `0/400` in Expert demotes to `100/300` in Adept.
+- Celestial has no higher rank and no point cap.
+
+This makes ranks semi-permanent without making them fully protected. A player can immediately lose points after promotion and keep their new rank because they start above that rank's demotion point, but sustained losses can still demote them.
 
 All players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's result in the same game.
 
@@ -245,17 +256,18 @@ delta = adjustedScore / 1000 + 20/10/0/-30 placement bonus
 
 It also adjusted only the 4th-place penalty by `sum(opponentRank - playerRank) * 5`.
 
-## Point Floor
+## Demotion Floor
 
-Points cannot go below zero.
+Novice points cannot go below zero.
 
 Current behavior:
 
 ```text
-points = max(0, points + delta)
+Novice losses stop at 0/100.
+Other ranks demote when rank-local points reach 0.
 ```
 
-This avoids discouraging negative totals while preventing old lucky streaks from permanently protecting a higher rank threshold.
+This avoids discouraging negative totals while still letting higher ranks demote after sustained losses.
 
 ## Data Model
 
@@ -298,7 +310,7 @@ This preserves everyone else's game history and still separates the scrubbed pla
 
 ## Open Decisions
 
-- Whether rank thresholds need retuning after the formula changes.
+- Whether rank start, limit, and demotion values need retuning after testing.
 - Whether scrubbed/fake player IDs need special display names in profile and leaderboard output.
 - Whether formula changes should remain retroactive while testing, or become locked once published.
 - Discord roles are intentionally out of scope for now.

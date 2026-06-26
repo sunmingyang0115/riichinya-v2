@@ -15,7 +15,7 @@ import BotProperties from "../../bot_properties.json"
 import { BotModule } from "../data/bot_module";
 import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
-import { LifetimePlayerState } from "./riichidb/lifetime_progression";
+import { calculateLifetimeGameDeltas, LifetimePlayerState } from "./riichidb/lifetime_progression";
 import { mkdirSync, writeFileSync } from "fs";
 
 dayjs.extend(utc);
@@ -227,7 +227,9 @@ export class RDBModule implements BotModule {
                 "Player",
                 "Rank",
                 "Pts",
-                "Next",
+                "Limit",
+                "Start",
+                "DemoteTo",
                 "RA",
                 "SAT",
                 "SRT",
@@ -244,7 +246,9 @@ export class RDBModule implements BotModule {
                     player.player_id,
                     player.rank_name,
                     this.formatLifetimePoints(player.points),
-                    player.next_rank_threshold === null ? "" : this.formatLifetimePoints(player.next_rank_threshold),
+                    this.formatLifetimeLimit(player.rank_limit),
+                    this.formatLifetimePoints(player.rank_start),
+                    player.demote_points === null ? "" : this.formatLifetimePoints(player.demote_points),
                     this.formatExportNumber(stats?.rank_average ?? player.rank_average, 2),
                     this.formatExportNumber(stats?.score_adj_total ?? player.total_adjusted_score / 1000, 1),
                     this.formatExportNumber(stats?.score_raw_total ?? 0, 1),
@@ -276,11 +280,19 @@ export class RDBModule implements BotModule {
     ): EmbedManager {
         const eb = new EmbedManager(`Recorded Game (${season.display_name})`, client);
         const promotions: string[] = [];
+        const lifetimeDeltas = calculateLifetimeGameDeltas(gameinfo.map(player => ({
+            game_id: "",
+            player_id: player.id,
+            raw_score: player.scoreRaw,
+            placement: player.placement,
+            target: season.target,
+            oka: season.oka,
+            rank: beforeLifetime.get(player.id)?.rank ?? 1,
+        })));
         const lines = gameinfo.map(player => {
             const before = beforeLifetime.get(player.id);
             const after = afterLifetime.get(player.id);
-            const beforePoints = before?.points ?? 0;
-            const delta = after ? after.points - beforePoints : 0;
+            const delta = lifetimeDeltas.get(player.id) ?? 0;
 
             if (after && after.rank > (before?.rank ?? 1)) {
                 promotions.push(`<@${player.id}> -> ${after.rank_name}`);
@@ -323,15 +335,23 @@ export class RDBModule implements BotModule {
     }
 
     private formatLifetimeRankProgressCompact(player: LifetimePlayerState): string {
-        const points = this.formatLifetimePoints(player.points);
-        if (player.next_rank_threshold === null) {
-            return `${player.rank_name} ${points}`;
-        }
-        return `${player.rank_name} ${points}/${player.next_rank_threshold}`;
+        return `${player.rank_name} ${this.formatLifetimeProgress(player)}`;
     }
 
     private formatLifetimePoints(points: number): string {
         return points.toFixed(1).replace(/\.0$/, "");
+    }
+
+    private formatLifetimeLimit(limit: number | null): string {
+        return limit === null ? "" : this.formatLifetimePoints(limit);
+    }
+
+    private formatLifetimeProgress(player: LifetimePlayerState): string {
+        const points = this.formatLifetimePoints(player.points);
+        if (player.rank_limit === null) {
+            return points;
+        }
+        return `${points}/${this.formatLifetimePoints(player.rank_limit)}`;
     }
 
     private formatExportNumber(value: number, digits: number): string {
@@ -801,15 +821,15 @@ export class RDBModule implements BotModule {
 
         players.forEach((player, index) => {
             if (player.rank_name !== previousRank) {
-                appendLine(`**${player.rank_name}** (${this.formatLifetimeRankRange(player)})`);
+                appendLine(`**${player.rank_name}**`);
                 previousRank = player.rank_name;
             }
 
             appendLine([
                 String(index + 1),
                 `<@${player.player_id}>`,
-                this.formatLifetimePoints(player.points),
-            ].join(" | "), player.rank_name);
+                this.formatLifetimeProgress(player),
+            ].join(" | "), `**${player.rank_name}**`);
         });
 
         if (current.length > 0) {
@@ -817,14 +837,6 @@ export class RDBModule implements BotModule {
         }
 
         return chunks;
-    }
-
-    private formatLifetimeRankRange(player: LifetimePlayerState): string {
-        const floor = this.formatLifetimePoints(player.floor);
-        if (player.next_rank_threshold === null) {
-            return `${floor}+ pts`;
-        }
-        return `${floor}-${player.next_rank_threshold} pts`;
     }
 
     private formatSignedFixed(value: number, digits: number): string {

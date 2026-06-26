@@ -75,9 +75,9 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
     };
     const formatLifetimePoints = (points: number) => points.toFixed(1).replace(/\.0$/, "");
     const lifetimeRankValue = lifetimeRank
-        ? lifetimeRank.next_rank_threshold === null
+        ? lifetimeRank.rank_limit === null
             ? `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} pts`
-            : `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} / ${lifetimeRank.next_rank_threshold} pts`
+            : `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} / ${formatLifetimePoints(lifetimeRank.rank_limit)} pts`
         : "Unranked";
     // Add stats
     if (stats) {
