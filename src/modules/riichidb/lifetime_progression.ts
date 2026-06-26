@@ -33,18 +33,20 @@ interface MutableLifetimePlayerState {
     promotions: number;
 }
 
+const MIN_LIFETIME_POINTS = 0;
+
 export const lifetimeRules = {
-    participationPoints: 0,
-    adjustedScoreDivisor: 1000,
-    basePlacementBonus: [20, 10, 0, -30] satisfies [number, number, number, number],
-    opponentRankDifferenceMultiplier: 5,
+    rawScoreDivisor: 1000,
+    basePlacementBonus: [30, 10, -10, -30] satisfies [number, number, number, number],
+    opponentRankDifferenceMultiplier: 0.5,
+    rankParticipationBonus: [10, 5, 0, 0, 0, 0] satisfies number[],
     ranks: [
         { name: "Novice", threshold: 0, color: 0x9acd32, iconFile: "Novice.png" },
         { name: "Adept", threshold: 100, color: 0x15803d, iconFile: "Intermediate.png" },
-        { name: "Expert", threshold: 300, color: 0xd4a017, iconFile: "Expert.png" },
-        { name: "Master", threshold: 600, color: 0xc66a2b, iconFile: "Master.png" },
-        { name: "Saint", threshold: 1000, color: 0xd94a73, iconFile: "Saint.png" },
-        { name: "Celestial", threshold: 1500, color: 0x38bdf8, iconFile: "Celestial.png" },
+        { name: "Expert", threshold: 250, color: 0xd4a017, iconFile: "Expert.png" },
+        { name: "Master", threshold: 500, color: 0xc66a2b, iconFile: "Master.png" },
+        { name: "Saint", threshold: 800, color: 0xd94a73, iconFile: "Saint.png" },
+        { name: "Celestial", threshold: 1200, color: 0x38bdf8, iconFile: "Celestial.png" },
     ] satisfies LifetimeRankRule[],
 };
 
@@ -62,10 +64,6 @@ export function getLifetimeRankColor(rank: number): number {
 
 export function getLifetimeRankIconFile(rank: number): string {
     return lifetimeRules.ranks[rank - 1]?.iconFile ?? lifetimeRules.ranks[0].iconFile;
-}
-
-function rankFloor(rank: number): number {
-    return lifetimeRules.ranks[rank - 1]?.threshold ?? lifetimeRules.ranks[lifetimeRules.ranks.length - 1].threshold;
 }
 
 function rankForPoints(points: number): number {
@@ -121,10 +119,6 @@ function getPlacementBonusForPlace(player: LifetimeGamePlayerSnapshot, table: Li
         throw new Error(`Invalid placement ${placement} in game ${player.result.game_id} for player ${player.result.player_id}.`);
     }
 
-    if (placement !== 4) {
-        return basePlacementBonus;
-    }
-
     const opponentRankDifference = table
         .filter(opponent => opponent.result.player_id !== player.result.player_id)
         .reduce((sum, opponent) => sum + opponent.rank - player.rank, 0);
@@ -132,25 +126,29 @@ function getPlacementBonusForPlace(player: LifetimeGamePlayerSnapshot, table: Li
     return basePlacementBonus + opponentRankDifference * lifetimeRules.opponentRankDifferenceMultiplier;
 }
 
-function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow, placementBonus: number): void {
-    if (placementBonus === undefined) {
+function getRankParticipationBonus(rank: number): number {
+    return lifetimeRules.rankParticipationBonus[rank - 1] ?? 0;
+}
+
+function applyLifetimeGame(player: MutableLifetimePlayerState, result: LifetimeGameResultRow, progressionBonus: number): void {
+    if (progressionBonus === undefined) {
         throw new Error(`Invalid placement ${result.placement} in game ${result.game_id} for player ${result.player_id}.`);
     }
 
-    const performancePoints = result.adj_score / lifetimeRules.adjustedScoreDivisor;
-    const delta = lifetimeRules.participationPoints + performancePoints + placementBonus;
+    const scoreMovement = (result.raw_score - result.target + result.oka) / lifetimeRules.rawScoreDivisor;
+    const delta = scoreMovement + progressionBonus;
 
     player.games += 1;
     player.total_adjusted_score += result.adj_score;
     player.total_placement += result.placement;
-    player.points = Math.max(player.floor, player.points + delta);
+    player.points = Math.max(MIN_LIFETIME_POINTS, player.points + delta);
 
     const nextRank = rankForPoints(player.points);
     if (nextRank > player.rank) {
-        player.rank = nextRank;
-        player.floor = rankFloor(nextRank);
         player.promotions += 1;
     }
+    player.rank = nextRank;
+    player.floor = MIN_LIFETIME_POINTS;
 }
 
 function applyLifetimeGameTable(players: Map<string, MutableLifetimePlayerState>, results: LifetimeGameResultRow[]): void {
@@ -163,7 +161,10 @@ function applyLifetimeGameTable(players: Map<string, MutableLifetimePlayerState>
         };
     });
 
-    const placements = new Map(table.map(player => [player.result.player_id, getPlacementBonus(player, table)]));
+    const placements = new Map(table.map(player => [
+        player.result.player_id,
+        getPlacementBonus(player, table) + getRankParticipationBonus(player.rank),
+    ]));
     for (const player of table) {
         applyLifetimeGame(player.player, player.result, placements.get(player.result.player_id)!);
     }

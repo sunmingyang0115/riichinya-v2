@@ -78,6 +78,8 @@ export interface LifetimeGameResultRow {
     raw_score: number;
     adj_score: number;
     placement: number;
+    target: number;
+    oka: number;
 };
 
 export interface SeasonAdjustedStanding {

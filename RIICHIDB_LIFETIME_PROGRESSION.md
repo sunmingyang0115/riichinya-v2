@@ -55,15 +55,15 @@ Lifetime progression currently counts regular games and excludes league seasons 
 
 ## Current Implemented Formula
 
-The current implementation is a cumulative progression system with permanent rank floors.
+The current implementation is a cumulative progression system with a zero-point floor.
 
 Current constants:
 
 ```ts
-participationPoints: 0
-adjustedScoreDivisor: 1000
-basePlacementBonus: [20, 10, 0, -30]
-opponentRankDifferenceMultiplier: 5
+rawScoreDivisor: 1000
+basePlacementBonus: [30, 10, -10, -30]
+opponentRankDifferenceMultiplier: 0.5
+rankParticipationBonus: [10, 5, 0, 0, 0, 0]
 ranks:
   Novice    threshold 0
   Adept     threshold 100
@@ -76,82 +76,9 @@ ranks:
 Per-player game delta:
 
 ```text
-delta = adjustedScore / 1000 + placementBonus
+scoreMovement = (rawScore - seasonTarget + seasonOka) / 1000
+delta = scoreMovement + lifetimeUma + difficultyBonus + participationBonus
 ```
-
-The base placement bonus is:
-
-```text
-1st: +20
-2nd: +10
-3rd: +0
-4th: -30
-```
-
-For 4th place only, the penalty is adjusted by table difficulty:
-
-```text
-opponentRankDifference = sum(opponentRank - playerRank)
-placementBonus = -30 + opponentRankDifference * 5
-```
-
-Example: Expert vs Adept, Master, and Novice:
-
-```text
-Expert rank = 3
-Opponents = 2, 4, 1
-opponentRankDifference = (2 - 3) + (4 - 3) + (1 - 3) = -2
-4th place penalty = -30 + (-2 * 5) = -40
-```
-
-Example: Celestial vs three Experts:
-
-```text
-Celestial rank = 6
-Opponents = 3, 3, 3
-opponentRankDifference = (3 - 6) + (3 - 6) + (3 - 6) = -9
-4th place penalty = -30 + (-9 * 5) = -75
-```
-
-After each game:
-
-```text
-points = max(currentRankFloor, points + delta)
-```
-
-If points meet a higher rank threshold, the player promotes. The new rank becomes permanent and the floor is raised to that rank threshold.
-
-All players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's result in the same game.
-
-## Current Tie Handling
-
-Tied placements split the occupied placement slots, similar to how tied uma is split.
-
-Examples:
-
-- Two players tied for 1st occupy 1st and 2nd, so both get `(20 + 10) / 2 = 15`.
-- Two players tied for 2nd occupy 2nd and 3rd, so both get `(10 + 0) / 2 = 5`.
-- Two players tied for 3rd occupy 3rd and 4th, so each gets `(0 + their own adjusted 4th penalty) / 2`.
-- Three players tied for 1st occupy 1st, 2nd, and 3rd, so all get `(20 + 10 + 0) / 3 = 10`.
-- Three players tied for 2nd occupy 2nd, 3rd, and 4th, so each gets `(10 + 0 + their own adjusted 4th penalty) / 3`.
-- Four players tied occupy 1st, 2nd, 3rd, and 4th, so each gets `(20 + 10 + 0 + their own adjusted 4th penalty) / 4`.
-
-Because the current adjusted 4th-place penalty is player-specific, tied players can receive different lifetime bonuses when the tie includes 4th place.
-
-## Formula Concerns
-
-The current formula is somewhat confusing because it combines two placement-sensitive systems:
-
-- `adjustedScore / 1000`, where adjusted score already includes season uma.
-- A separate lifetime placement bonus of `20/10/0/-30`.
-
-This makes placement matter, but it can feel like uma is being counted twice. It also makes the lifetime system harder to explain because regular seasons, league seasons, adjusted score, placement bonus, and opponent rank penalty are all mixed together.
-
-The last-place penalty was originally inspired by online ladder systems, where harsh 4th-place punishment discourages disconnecting or reckless play. That problem is less relevant for in-person club games.
-
-## Proposed Next Formula
-
-Keep league scoring unchanged, but make lifetime progression its own zero-sum placement system.
 
 Base lifetime placement points:
 
@@ -168,7 +95,7 @@ This is zero-sum:
 +30 +10 -10 -30 = 0
 ```
 
-Then add a small opponent difficulty adjustment:
+Then add a small opponent difficulty adjustment to every placement:
 
 ```text
 difficultyBonus = 0.5 * sum(opponentRank - playerRank)
@@ -197,7 +124,7 @@ sum = (2 - 3) + (4 - 3) + (1 - 3)
 difficultyBonus = -1.0
 ```
 
-So that Expert's lifetime deltas would be:
+Before raw score movement, that Expert's lifetime placement layer would be:
 
 ```text
 1st: +29
@@ -215,7 +142,7 @@ sum = (3 - 1) + (3 - 1) + (3 - 1) = 6
 difficultyBonus = +3.0
 ```
 
-So that Novice's lifetime deltas would be:
+Before raw score movement, that Novice's lifetime placement layer would be:
 
 ```text
 1st: +33
@@ -233,7 +160,7 @@ sum = (3 - 6) + (3 - 6) + (3 - 6) = -9
 difficultyBonus = -4.5
 ```
 
-So that Celestial's lifetime deltas would be:
+Before raw score movement, that Celestial's lifetime placement layer would be:
 
 ```text
 1st: +25.5
@@ -244,9 +171,31 @@ So that Celestial's lifetime deltas would be:
 
 This difficulty adjustment is zero-sum across the table because every pairwise rank difference cancels out.
 
-## Proposed Tie Handling
+Early ranks also receive a participation bonus based on the player's rank before the game:
 
-For the proposed formula, tied placements should still average the occupied placement slots.
+```text
+Novice:    +10
+Adept:     +5
+Expert+:   +0
+```
+
+This intentionally makes lifetime progression slightly positive-sum in early ranks, so active newer players can climb out of Novice and Adept with enough games.
+
+After each game:
+
+```text
+points = max(0, points + delta)
+```
+
+The rank shown is based on the player's current points. Promotion thresholds are not permanent floors, so players can drop to a lower rank if their points fall below that rank's threshold.
+
+All players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's result in the same game.
+
+Stored adjusted score is still tracked for profile stats, but it no longer contributes directly to lifetime points because it already contains the season's uma. Lifetime points reconstruct score movement from raw score, target, and oka, then add lifetime-specific uma.
+
+## Current Tie Handling
+
+Tied placements split the occupied placement slots, similar to how tied uma is split.
 
 Examples:
 
@@ -261,37 +210,52 @@ Then apply each player's own difficulty bonus.
 
 This keeps the base placement system zero-sum even with ties, and the difficulty adjustment remains zero-sum across the table.
 
-## Why The Proposed Formula Is Cleaner
+## Why This Formula Is Cleaner
 
-The proposed formula is easier to explain:
+The previous formula combined two placement-sensitive systems:
+
+- `adjustedScore / 1000`, where adjusted score already includes season uma.
+- A separate lifetime placement bonus of `20/10/0/-30`.
+
+The new formula is easier to explain:
 
 ```text
-Lifetime ranks use +30/+10/-10/-30 placement points, adjusted slightly by opponent rank difficulty.
+Lifetime ranks use score movement plus +30/+10/-10/-30 lifetime uma, adjusted slightly by opponent rank difficulty, with small early-rank participation bonuses.
 ```
 
 Benefits:
 
 - It keeps league scoring and lifetime progression separate.
-- It avoids double-counting season uma through adjusted score.
+- It avoids using stored adjusted score, which already contains season uma.
+- It still rewards bigger wins through raw score movement.
 - It makes placement matter more than `15/5/-5/-15`.
 - It keeps all base placement points zero-sum.
 - It rewards beating stronger tables and softens losses against stronger tables.
+- It lets active Novice and Adept players make progress without making higher ranks attendance-based.
 - It reduces the special online-style 4th-place punishment.
 - It is easier to tune because there are only two main knobs: placement points and difficulty multiplier.
 
-## Rank Floors
+## Previous Formula
 
-Rank floors should remain.
+The previous implemented formula was:
+
+```text
+delta = adjustedScore / 1000 + 20/10/0/-30 placement bonus
+```
+
+It also adjusted only the 4th-place penalty by `sum(opponentRank - playerRank) * 5`.
+
+## Point Floor
+
+Points cannot go below zero.
 
 Current behavior:
 
 ```text
-points = max(currentRankFloor, points + delta)
+points = max(0, points + delta)
 ```
 
-Promotion raises the player's permanent floor to the new rank threshold.
-
-This keeps lifetime ranks feeling like progression instead of a volatile leaderboard.
+This avoids discouraging negative totals while preventing old lucky streaks from permanently protecting a higher rank threshold.
 
 ## Data Model
 
@@ -334,9 +298,6 @@ This preserves everyone else's game history and still separates the scrubbed pla
 
 ## Open Decisions
 
-- Whether to replace the current implemented formula with the proposed `30/10/-10/-30 + 0.5 * rank difference` formula.
-- Whether difficulty should apply to every placement, as proposed, or only to losses.
-- Whether lifetime should ignore adjusted score entirely under the proposed formula.
 - Whether rank thresholds need retuning after the formula changes.
 - Whether scrubbed/fake player IDs need special display names in profile and leaderboard output.
 - Whether formula changes should remain retroactive while testing, or become locked once published.
@@ -345,9 +306,8 @@ This preserves everyone else's game history and still separates the scrubbed pla
 ## Risks And Gotchas
 
 - Recomputing lifetime from historical games means formula changes update everyone's rank retroactively.
-- Permanent floors depend on chronological order. Ordering by date plus game id should stay deterministic.
+- Rank and participation calculations depend on chronological order. Ordering by date plus game id should stay deterministic.
 - Deleting or editing old games can change current lifetime points/ranks.
 - The profile should keep distinguishing lifetime rank from adjusted-score leaderboard rank.
 - Fake scrub IDs may render as broken Discord mentions unless display formatting handles them.
 - Old `riichiElo` prototype files use an older schema and should not be copied directly into the bot.
-

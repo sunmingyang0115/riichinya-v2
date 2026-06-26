@@ -80,9 +80,12 @@ export class RiichiDatabase {
                 p.player_id,
                 p.raw_score,
                 p.adj_score,
-                p.placement
+                p.placement,
+                s.target,
+                s.oka
             from GameTable g
                 inner join ParticipantTable p on g.game_id = p.game_id
+                inner join SeasonTable s on g.season_id = s.season_id
             where substr(g.season_id, -2) != '_L'
             order by g.date asc, g.game_id asc, p.player_id asc
         `;
@@ -98,6 +101,27 @@ export class RiichiDatabase {
     public static async getLifetimePlayer(player_id: string): Promise<LifetimePlayerState | null> {
         const results = await this.getLifetimeGameResults();
         return calculateLifetimeProgression(results).find(player => player.player_id === player_id) ?? null;
+    }
+
+    public static async getLifetimeLeaderboardStats(): Promise<LeaderboardEntry[]> {
+        const query = `
+            select
+                p.player_id,
+                sum(p.placement) * 1.0 / count(p.game_id) as rank_average,
+                sum(p.adj_score) / 1000.0 as score_adj_total,
+                sum(p.raw_score) / 1000.0 as score_raw_total,
+                sum(p.adj_score) / 1000.0 / count(p.game_id) as score_adj_average,
+                sum(p.raw_score) / 1000.0 / count(p.game_id) as score_raw_average,
+                sum(p.placement) as rank_total,
+                count(p.game_id) as game_total
+            from ParticipantTable p
+                inner join GameTable g on p.game_id = g.game_id
+            where substr(g.season_id, -2) != '_L'
+            group by p.player_id
+            order by p.player_id asc
+        `;
+        const db = await this.db.getDB();
+        return await db.all<LeaderboardEntry[]>(query);
     }
 
     public static async getCurrentSeasonEnsureExists(): Promise<SeasonEntry | null> {

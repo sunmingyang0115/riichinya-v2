@@ -16,11 +16,12 @@ import { BotModule } from "../data/bot_module";
 import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
 import { LifetimePlayerState } from "./riichidb/lifetime_progression";
+import { mkdirSync, writeFileSync } from "fs";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-type SeasonSelectorType = "all" | "current" | "league" | "season";
+type SeasonSelectorType = "default" | "all" | "current" | "league" | "season";
 const DEFAULT_LEADERBOARD_AMOUNT = 50;
 const DEFAULT_LIFETIME_RANK_AMOUNT = 30;
 const MAX_FIELD_LEADERBOARD_AMOUNT = 40;
@@ -32,6 +33,7 @@ const LEAGUE_WEEK_START_DAY = 3;
 const LEAGUE_TIMEZONE = "America/Toronto";
 const INSERT_SCORES_COMMAND = "Insert Scores";
 const INSERT_LEAGUE_SCORES_COMMAND = "Insert League Scores";
+const LIFETIME_LEADERBOARD_EXPORT_PATH = "tmp/rdb-rank-leaderboard.txt";
 
 interface ParsedSeasonArgs {
     scope: PlayerProfileScope;
@@ -52,6 +54,7 @@ export class RDBModule implements BotModule {
             .setType(ApplicationCommandType.Message);
 
         ctx.addMessageCommand('rdb', this.runCommand.bind(this));
+        ctx.addBotReady(this.writeLifetimeRankLeaderboardFile.bind(this));
         ctx.addMessageContextMenu(rest.toJSON(), INSERT_SCORES_COMMAND, this.messageCtxHandler.bind(this));
 
         const rest_league = new ContextMenuCommandBuilder()
@@ -209,6 +212,56 @@ export class RDBModule implements BotModule {
         return new Map(players.filter(player => wanted.has(player.player_id)).map(player => [player.player_id, player]));
     }
 
+    private async writeLifetimeRankLeaderboardFile(_conf: BotConfig, _client: Client): Promise<void> {
+        const [rankRows, statsRows] = await Promise.all([
+            RiichiDatabase.getLifetimeLeaderboard(0, Number.MAX_SAFE_INTEGER),
+            RiichiDatabase.getLifetimeLeaderboardStats(),
+        ]);
+        const statsByPlayer = new Map(statsRows.map(row => [row.player_id, row]));
+        const lines = [
+            `Generated\t${new Date().toISOString()}`,
+            "Scope\tRegular games only; excludes league seasons ending in _L",
+            "",
+            [
+                "No",
+                "Player",
+                "Rank",
+                "Pts",
+                "Next",
+                "RA",
+                "SAT",
+                "SRT",
+                "SAA",
+                "SRA",
+                "RT",
+                "GT",
+                "Promotions",
+            ].join("\t"),
+            ...rankRows.map((player, index) => {
+                const stats = statsByPlayer.get(player.player_id);
+                return [
+                    index + 1,
+                    player.player_id,
+                    player.rank_name,
+                    this.formatLifetimePoints(player.points),
+                    player.next_rank_threshold === null ? "" : this.formatLifetimePoints(player.next_rank_threshold),
+                    this.formatExportNumber(stats?.rank_average ?? player.rank_average, 2),
+                    this.formatExportNumber(stats?.score_adj_total ?? player.total_adjusted_score / 1000, 1),
+                    this.formatExportNumber(stats?.score_raw_total ?? 0, 1),
+                    this.formatExportNumber(stats?.score_adj_average ?? player.score_adj_average, 1),
+                    this.formatExportNumber(stats?.score_raw_average ?? 0, 1),
+                    this.formatExportNumber(stats?.rank_total ?? player.total_placement, 0),
+                    this.formatExportNumber(stats?.game_total ?? player.games, 0),
+                    player.promotions,
+                ].join("\t");
+            }),
+        ];
+
+        mkdirSync("tmp", { recursive: true });
+        writeFileSync(LIFETIME_LEADERBOARD_EXPORT_PATH, lines.join("\n"));
+        console.log(`Wrote ${LIFETIME_LEADERBOARD_EXPORT_PATH}`);
+    }
+
     private async getSeasonAdjustedStandingMap(seasonId: string): Promise<Map<string, SeasonAdjustedStanding>> {
         const standings = await RiichiDatabase.getSeasonAdjustedStandings(seasonId);
         return new Map(standings.map(standing => [standing.player_id, standing]));
@@ -279,6 +332,10 @@ export class RDBModule implements BotModule {
 
     private formatLifetimePoints(points: number): string {
         return points.toFixed(1).replace(/\.0$/, "");
+    }
+
+    private formatExportNumber(value: number, digits: number): string {
+        return value.toFixed(digits);
     }
 
     private async replyWithPlayerProfile(event: Message<boolean>, user: Message<boolean>["author"], args: string[]): Promise<void> {
@@ -636,12 +693,12 @@ export class RDBModule implements BotModule {
     }
 
     private async parseSeasonScope(args: string[]): Promise<ParsedSeasonArgs> {
-        let selectorType: SeasonSelectorType = "all";
+        let selectorType: SeasonSelectorType = "default";
         let selectedSeasonId = "";
         const remaining: string[] = [];
 
         const setSelector = (type: SeasonSelectorType, seasonId = "") => {
-            if (selectorType !== "all") {
+            if (selectorType !== "default") {
                 throw new Error("Use only one season selector.");
             }
             selectorType = type;
@@ -650,7 +707,9 @@ export class RDBModule implements BotModule {
 
         for (let i = 0; i < args.length; i++) {
             const arg = args[i];
-            if (arg === "--current" || arg === "-c") {
+            if (arg === "--all" || arg === "-a") {
+                setSelector("all");
+            } else if (arg === "--current" || arg === "-c") {
                 setSelector("current");
             } else if (arg === "--league" || arg === "-l") {
                 setSelector("league");
@@ -671,6 +730,14 @@ export class RDBModule implements BotModule {
             }
         }
 
+        if (selectorType === "default" || selectorType === "league") {
+            const season = await this.getCurrentLeagueSeasonOrThrow();
+            return {
+                scope: { season_id: season.season_id, display_name: season.display_name },
+                args: remaining,
+            };
+        }
+
         if (selectorType === "all") {
             return {
                 scope: { season_id: null, display_name: "All Seasons" },
@@ -680,14 +747,6 @@ export class RDBModule implements BotModule {
 
         if (selectorType === "current") {
             const season = await this.getCurrentSeasonOrThrow();
-            return {
-                scope: { season_id: season.season_id, display_name: season.display_name },
-                args: remaining,
-            };
-        }
-
-        if (selectorType === "league") {
-            const season = await this.getCurrentLeagueSeasonOrThrow();
             return {
                 scope: { season_id: season.season_id, display_name: season.display_name },
                 args: remaining,
