@@ -22,6 +22,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 type SeasonSelectorType = "default" | "all" | "current" | "league" | "season";
+type DefaultSeasonScope = "all" | "league";
 const DEFAULT_LEADERBOARD_AMOUNT = 50;
 const DEFAULT_LIFETIME_RANK_AMOUNT = 30;
 const MAX_FIELD_LEADERBOARD_AMOUNT = 40;
@@ -298,7 +299,7 @@ export class RDBModule implements BotModule {
                 promotions.push(`<@${player.id}> -> ${after.rank_name}`);
             }
 
-            return `${player.placement} <@${player.id}> ${this.formatSignedFixed(player.scoreAdj / 1000, 1)} | ${this.formatSignedFixed(delta, 1)} -> ${after ? this.formatLifetimeRankProgressCompact(after) : "Unranked"}`;
+            return `${player.placement} <@${player.id}> ${this.formatSignedFixed(player.scoreAdj / 1000, 1)} | ${this.formatSignedFixed(delta, 0)} -> ${after ? this.formatLifetimeRankProgressCompact(after) : "Unranked"}`;
         });
 
         eb.addContent(lines.join("\n"));
@@ -339,7 +340,7 @@ export class RDBModule implements BotModule {
     }
 
     private formatLifetimePoints(points: number): string {
-        return points.toFixed(1).replace(/\.0$/, "");
+        return String(Math.trunc(points));
     }
 
     private formatLifetimeLimit(limit: number | null): string {
@@ -359,7 +360,7 @@ export class RDBModule implements BotModule {
     }
 
     private async replyWithPlayerProfile(event: Message<boolean>, user: Message<boolean>["author"], args: string[]): Promise<void> {
-        const parsed = await this.parseSeasonScope(args);
+        const parsed = await this.parseSeasonScope(args, "all");
         if (parsed.args.length > 0) {
             throw new Error(`Unexpected argument(s): ${parsed.args.join(" ")}`);
         }
@@ -369,7 +370,7 @@ export class RDBModule implements BotModule {
     }
 
     private async replyWithMentionShortcut(event: Message<boolean>, args: string[]): Promise<boolean> {
-        const parsed = await this.parseSeasonScope(args);
+        const parsed = await this.parseSeasonScope(args, "all");
         const mentionArgs = parsed.args.filter(arg => this.isDiscordMention(arg));
 
         if (mentionArgs.length === 0) {
@@ -712,8 +713,8 @@ export class RDBModule implements BotModule {
         return season;
     }
 
-    private async parseSeasonScope(args: string[]): Promise<ParsedSeasonArgs> {
-        let selectorType: SeasonSelectorType = "default";
+    private async parseSeasonScope(args: string[], defaultScope: DefaultSeasonScope = "league"): Promise<ParsedSeasonArgs> {
+        let selectorType = "default" as SeasonSelectorType;
         let selectedSeasonId = "";
         const remaining: string[] = [];
 
@@ -750,17 +751,17 @@ export class RDBModule implements BotModule {
             }
         }
 
-        if (selectorType === "default" || selectorType === "league") {
-            const season = await this.getCurrentLeagueSeasonOrThrow();
+        if ((selectorType === "default" && defaultScope === "all") || selectorType === "all") {
             return {
-                scope: { season_id: season.season_id, display_name: season.display_name },
+                scope: { season_id: null, display_name: "All Seasons" },
                 args: remaining,
             };
         }
 
-        if (selectorType === "all") {
+        if (selectorType === "default" || selectorType === "league") {
+            const season = await this.getCurrentLeagueSeasonOrThrow();
             return {
-                scope: { season_id: null, display_name: "All Seasons" },
+                scope: { season_id: season.season_id, display_name: season.display_name },
                 args: remaining,
             };
         }

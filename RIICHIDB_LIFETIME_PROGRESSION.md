@@ -40,6 +40,7 @@ Current user-facing pieces:
 Current season-scope behavior for RiichiDB commands:
 
 - Default: current league season.
+- Player profile default: all seasons.
 - `-l` / `--league`: current league season.
 - `-c` / `--current`: current regular season.
 - `-a` / `--all`: all seasons.
@@ -78,7 +79,15 @@ Per-player game delta:
 
 ```text
 scoreMovement = (rawScore - seasonTarget + seasonOka) / 1000
-delta = scoreMovement + lifetimeUma + difficultyBonus + participationBonus
+rawDelta = scoreMovement + lifetimeUma + difficultyBonus + participationBonus
+delta = ceil(rawDelta)
+```
+
+Lifetime point deltas and stored lifetime points are integers. The final per-game delta is always rounded up toward positive infinity, matching Mahjong Soul-style rank points:
+
+```text
+39.2 -> +40
+-1.9 -> -1
 ```
 
 Base lifetime placement points:
@@ -100,7 +109,7 @@ Then add a small opponent difficulty adjustment to every placement:
 
 ```text
 difficultyBonus = 0.5 * sum(opponentRank - playerRank)
-delta = placementPoints + difficultyBonus
+rawPlacementLayer = placementPoints + difficultyBonus
 ```
 
 Rank numbers:
@@ -170,7 +179,7 @@ Before raw score movement, that Celestial's lifetime placement layer would be:
 4th: -34.5
 ```
 
-This difficulty adjustment is zero-sum across the table because every pairwise rank difference cancels out.
+This difficulty adjustment is zero-sum across the table before final rounding because every pairwise rank difference cancels out. The final ceiling step can make the stored integer deltas slightly positive-sum.
 
 Early ranks also receive a participation bonus based on the player's rank before the game:
 
@@ -219,7 +228,7 @@ Examples:
 
 Then apply each player's own difficulty bonus.
 
-This keeps the base placement system zero-sum even with ties, and the difficulty adjustment remains zero-sum across the table.
+This keeps the base placement system zero-sum even with ties, and the difficulty adjustment remains zero-sum across the table before the final ceiling step.
 
 ## Why This Formula Is Cleaner
 

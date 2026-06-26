@@ -73,7 +73,7 @@ export async function playerProfileCreator(scope: PlayerProfileScope, user: User
         const val = adj.toFixed(1);
         return adj > 0 ? `+${val}` : val;
     };
-    const formatLifetimePoints = (points: number) => points.toFixed(1).replace(/\.0$/, "");
+    const formatLifetimePoints = (points: number) => String(Math.trunc(points));
     const lifetimeRankValue = lifetimeRank
         ? lifetimeRank.rank_limit === null
             ? `${lifetimeRank.rank_name} ${formatLifetimePoints(lifetimeRank.points)} pts`

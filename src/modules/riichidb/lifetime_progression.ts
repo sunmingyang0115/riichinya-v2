@@ -135,7 +135,7 @@ function getRankParticipationBonus(rank: number): number {
 
 function getLifetimeGameDelta(player: LifetimeGamePlayerSnapshot, table: LifetimeGamePlayerSnapshot[]): number {
     const scoreMovement = (player.result.raw_score - player.result.target + player.result.oka) / lifetimeRules.rawScoreDivisor;
-    return scoreMovement + getPlacementBonus(player, table) + getRankParticipationBonus(player.rank);
+    return Math.ceil(scoreMovement + getPlacementBonus(player, table) + getRankParticipationBonus(player.rank));
 }
 
 export function calculateLifetimeGameDeltas(results: LifetimeGameDeltaInput[]): Map<string, number> {
