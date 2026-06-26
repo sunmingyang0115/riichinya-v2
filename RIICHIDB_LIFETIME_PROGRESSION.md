@@ -1,39 +1,63 @@
 # RiichiDB Lifetime Progression Notes
 
-Status: implemented against the bot source of truth, `rdb2.sql`.
+Status: implemented, but the points formula is still being evaluated.
 
-## Why This File Lives Here
+## Product Goal
 
-The `riichiElo` folder is useful as a reference/prototype repo, but the actual feature belongs to this Discord bot. The bot owns the commands, profile embed, and live `rdb2.sql` database. These notes should stay with the bot code and refer back to `riichiElo` where needed.
+Lifetime progression gives recorded club games long-term meaning outside league prizes.
 
-## Reference Files Read
+The system should:
 
-- `riichiElo/plan.txt`
-- `riichiElo/sql/simulateLifetime.ts`
-- `riichiElo/sql/lifetimeTable.ts`
-- `src/modules/riichidb.ts`
+- Show a player's lifetime rank on RiichiDB profiles.
+- Provide a lifetime ranks command.
+- Count regular recorded games toward lifetime progression.
+- Keep league scoring separate from lifetime progression.
+- Avoid Discord role automation for now.
+
+League games should still use the normal league uma, currently `15/5/-5/-15`, because that keeps league standings more comeback-friendly after one big result.
+
+Lifetime progression does not need to use the same scoring shape as league.
+
+## Current Bot Behavior
+
+Implemented files:
+
+- `src/modules/riichidb/lifetime_progression.ts`
 - `src/modules/riichidb/sql_db2.ts`
-- `src/modules/riichidb/db_struct.ts`
 - `src/modules/riichidb/query_struct.ts`
+- `src/modules/riichidb.ts`
 - `src/templates/playerProfile.ts`
-- `src/scripts/migrate_riichidb.ts`
 
-## Feature Goal
+Current user-facing pieces:
 
-Add a lifetime progression system to RiichiDB so recorded club games have long-term meaning outside league prizes.
+- `ron rdb ranks`
+- `ron rdb ranks 50`
+- `ron rdb ranks all`
+- Lifetime rank/progress on player profiles.
+- Regular score submissions show lifetime delta/progress.
+- League score submissions show league rank/total, not lifetime progress.
 
-Expected user-facing pieces:
+Current season-scope behavior for RiichiDB commands:
 
-- A command to view lifetime ranks.
-- Lifetime rank/progression shown on RiichiDB player profiles.
-- Regular recorded games affect lifetime progression.
-- League games do not affect lifetime progression; league submissions surface league rank and league adjusted total instead.
+- Default: current league season.
+- `-l` / `--league`: current league season.
+- `-c` / `--current`: current regular season.
+- `-a` / `--all`: all seasons.
+- `-s <id>` / `--season <id>`: explicit season.
 
-## Prototype Formula
+Shortcut profile/compare commands:
 
-The current prototype in `riichiElo/sql/simulateLifetime.ts` is not pure Elo. It is a cumulative progression system with permanent rank floors.
+- `ron rdb @player`: profile.
+- `ron rdb @player1 @player2`: comparison.
+- Seasonal tags still work, for example `ron rdb @player -c` or `ron rdb @player1 @player2 -a`.
 
-Current prototype constants:
+Lifetime progression currently counts regular games and excludes league seasons whose `season_id` ends with `_L`.
+
+## Current Implemented Formula
+
+The current implementation is a cumulative progression system with permanent rank floors.
+
+Current constants:
 
 ```ts
 participationPoints: 0
@@ -52,10 +76,17 @@ ranks:
 Per-player game delta:
 
 ```text
-delta = participationPoints + adjustedScore / adjustedScoreDivisor + placementBonus
+delta = adjustedScore / 1000 + placementBonus
 ```
 
-The base placement bonus is `[+20, +10, +0, -30]`.
+The base placement bonus is:
+
+```text
+1st: +20
+2nd: +10
+3rd: +0
+4th: -30
+```
 
 For 4th place only, the penalty is adjusted by table difficulty:
 
@@ -64,11 +95,37 @@ opponentRankDifference = sum(opponentRank - playerRank)
 placementBonus = -30 + opponentRankDifference * 5
 ```
 
-For tied placements, progression bonuses are split across the occupied placement slots the same way uma is split:
+Example: Expert vs Adept, Master, and Novice:
 
 ```text
-tieBonus = average(each occupied placement bonus)
+Expert rank = 3
+Opponents = 2, 4, 1
+opponentRankDifference = (2 - 3) + (4 - 3) + (1 - 3) = -2
+4th place penalty = -30 + (-2 * 5) = -40
 ```
+
+Example: Celestial vs three Experts:
+
+```text
+Celestial rank = 6
+Opponents = 3, 3, 3
+opponentRankDifference = (3 - 6) + (3 - 6) + (3 - 6) = -9
+4th place penalty = -30 + (-9 * 5) = -75
+```
+
+After each game:
+
+```text
+points = max(currentRankFloor, points + delta)
+```
+
+If points meet a higher rank threshold, the player promotes. The new rank becomes permanent and the floor is raised to that rank threshold.
+
+All players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's result in the same game.
+
+## Current Tie Handling
+
+Tied placements split the occupied placement slots, similar to how tied uma is split.
 
 Examples:
 
@@ -79,32 +136,164 @@ Examples:
 - Three players tied for 2nd occupy 2nd, 3rd, and 4th, so each gets `(10 + 0 + their own adjusted 4th penalty) / 3`.
 - Four players tied occupy 1st, 2nd, 3rd, and 4th, so each gets `(20 + 10 + 0 + their own adjusted 4th penalty) / 4`.
 
-The adjusted 4th penalty is still player-specific, so tied players can receive different progression bonuses when the tie includes 4th place.
+Because the current adjusted 4th-place penalty is player-specific, tied players can receive different lifetime bonuses when the tie includes 4th place.
 
-After each game:
+## Formula Concerns
+
+The current formula is somewhat confusing because it combines two placement-sensitive systems:
+
+- `adjustedScore / 1000`, where adjusted score already includes season uma.
+- A separate lifetime placement bonus of `20/10/0/-30`.
+
+This makes placement matter, but it can feel like uma is being counted twice. It also makes the lifetime system harder to explain because regular seasons, league seasons, adjusted score, placement bonus, and opponent rank penalty are all mixed together.
+
+The last-place penalty was originally inspired by online ladder systems, where harsh 4th-place punishment discourages disconnecting or reckless play. That problem is less relevant for in-person club games.
+
+## Proposed Next Formula
+
+Keep league scoring unchanged, but make lifetime progression its own zero-sum placement system.
+
+Base lifetime placement points:
+
+```text
+1st: +30
+2nd: +10
+3rd: -10
+4th: -30
+```
+
+This is zero-sum:
+
+```text
++30 +10 -10 -30 = 0
+```
+
+Then add a small opponent difficulty adjustment:
+
+```text
+difficultyBonus = 0.5 * sum(opponentRank - playerRank)
+delta = placementPoints + difficultyBonus
+```
+
+Rank numbers:
+
+```text
+Novice    = 1
+Adept     = 2
+Expert    = 3
+Master    = 4
+Saint     = 5
+Celestial = 6
+```
+
+Example: Expert vs Adept, Master, and Novice:
+
+```text
+Expert rank = 3
+Opponents = 2, 4, 1
+sum = (2 - 3) + (4 - 3) + (1 - 3)
+    = -1 + 1 - 2
+    = -2
+difficultyBonus = -1.0
+```
+
+So that Expert's lifetime deltas would be:
+
+```text
+1st: +29
+2nd: +9
+3rd: -11
+4th: -31
+```
+
+Example: Novice vs three Experts:
+
+```text
+Novice rank = 1
+Opponents = 3, 3, 3
+sum = (3 - 1) + (3 - 1) + (3 - 1) = 6
+difficultyBonus = +3.0
+```
+
+So that Novice's lifetime deltas would be:
+
+```text
+1st: +33
+2nd: +13
+3rd: -7
+4th: -27
+```
+
+Example: Celestial vs three Experts:
+
+```text
+Celestial rank = 6
+Opponents = 3, 3, 3
+sum = (3 - 6) + (3 - 6) + (3 - 6) = -9
+difficultyBonus = -4.5
+```
+
+So that Celestial's lifetime deltas would be:
+
+```text
+1st: +25.5
+2nd: +5.5
+3rd: -14.5
+4th: -34.5
+```
+
+This difficulty adjustment is zero-sum across the table because every pairwise rank difference cancels out.
+
+## Proposed Tie Handling
+
+For the proposed formula, tied placements should still average the occupied placement slots.
+
+Examples:
+
+- Two-way tie for 1st: `(+30 + +10) / 2 = +20`.
+- Two-way tie for 2nd: `(+10 + -10) / 2 = 0`.
+- Two-way tie for 3rd: `(-10 + -30) / 2 = -20`.
+- Three-way tie for 1st: `(+30 + +10 + -10) / 3 = +10`.
+- Three-way tie for 2nd: `(+10 + -10 + -30) / 3 = -10`.
+- Four-way tie: `(+30 + +10 + -10 + -30) / 4 = 0`.
+
+Then apply each player's own difficulty bonus.
+
+This keeps the base placement system zero-sum even with ties, and the difficulty adjustment remains zero-sum across the table.
+
+## Why The Proposed Formula Is Cleaner
+
+The proposed formula is easier to explain:
+
+```text
+Lifetime ranks use +30/+10/-10/-30 placement points, adjusted slightly by opponent rank difficulty.
+```
+
+Benefits:
+
+- It keeps league scoring and lifetime progression separate.
+- It avoids double-counting season uma through adjusted score.
+- It makes placement matter more than `15/5/-5/-15`.
+- It keeps all base placement points zero-sum.
+- It rewards beating stronger tables and softens losses against stronger tables.
+- It reduces the special online-style 4th-place punishment.
+- It is easier to tune because there are only two main knobs: placement points and difficulty multiplier.
+
+## Rank Floors
+
+Rank floors should remain.
+
+Current behavior:
 
 ```text
 points = max(currentRankFloor, points + delta)
 ```
 
-If points meet a higher rank threshold, the player promotes. The new rank becomes permanent and the floor is raised to that rank threshold.
+Promotion raises the player's permanent floor to the new rank threshold.
 
-Important: all players in a game use the ranks they had before that game is applied, so one player's promotion does not affect another player's penalty in the same game.
+This keeps lifetime ranks feeling like progression instead of a volatile leaderboard.
 
-## Prototype Details
-
-The simulator reads old tables:
-
-- `DataGame`
-- `DataPlayer`
-
-The bot no longer uses those as its active schema.
-
-The simulator computes placements from raw score order, then uses adjusted score for progression. In the bot's current schema, `placement` is already stored on `ParticipantTable`, so the bot does not need to recompute it for normal use.
-
-The simulator also computes `opponentDifficultyByPlayer`. In the bot implementation, this concept now affects the 4th-place penalty through the opponent rank difference formula above.
-
-## Current Bot Schema
+## Data Model
 
 The bot uses `rdb2.sql` through `src/modules/riichidb/sql_db2.ts`.
 
@@ -115,7 +304,7 @@ Current tables:
 - `ParticipantTable`
 - `ConfigTable`
 
-Relevant data is already present:
+Relevant fields:
 
 - `GameTable.game_id`
 - `GameTable.season_id`
@@ -125,245 +314,40 @@ Relevant data is already present:
 - `ParticipantTable.adj_score`
 - `ParticipantTable.placement`
 
-Observed live DB state during analysis:
+The current implementation recomputes lifetime progression from historical rows instead of storing a derived lifetime table.
 
-- `SeasonTable`: 8 seasons
-- `GameTable`: 541 games
-- `ParticipantTable`: 2164 participants
-- Date range: `2024-10-07T02:06:22.247Z` to `2026-06-23T00:45:35.596Z`
-- `current_season`: `S26`
-- `current_league_season`: `S26_L`
+This is acceptable while the formula is still being tuned. If the database grows or the formula becomes stable, a cached/materialized table can be added later.
 
-Season game counts:
+## Scrubbing Cheaters
 
-```text
-F24:    66
-W25:    11
-S25:   105
-F25_1: 105
-F25_2:  84
-W26:   118
-S26:    19
-S26_L:  33
-```
+If a player needs to be scrubbed from historical results, prefer replacing their `ParticipantTable.player_id` with a reserved fake numeric ID instead of deleting games.
 
-## Current Bot Command/Profile Flow
+Recommended approach:
 
-Main command module:
+- Use an admin-only script or command like `scrub_player oldDiscordId newScrubId`.
+- Update only `ParticipantTable.player_id`.
+- Keep games, raw scores, adjusted scores, placements, and seasons intact.
+- Refuse to scrub into an ID that already exists unless explicitly forced.
+- Keep an audit record with old ID, scrub ID, reason, and date.
 
-- `src/modules/riichidb.ts`
-
-Existing user-facing commands:
-
-- `ron rdb me`
-- `ron rdb player @user`
-- `ron rdb compare ...`
-- `ron rdb league`
-- `ron rdb ...leaderboard args...`
-
-Existing season selectors:
-
-- default: all seasons
-- `--current` / `-c`
-- `--league` / `-l`
-- `--season <id>` / `-s <id>`
-
-Existing insert flows:
-
-- Message context menu `Insert Scores` inserts into current regular season.
-- Message context menu `Insert League Scores` inserts into current league season.
-
-Profile rendering:
-
-- `src/templates/playerProfile.ts`
-- Calls `RiichiDatabase.getPlayerProfile(...)`
-- Calls `RiichiDatabase.getRecentGames(...)`
-- Calls `RiichiDatabase.getOpponentDelta(...)`
-
-The profile currently displays a field named `Rank`, but that rank is leaderboard position by total adjusted score, not lifetime progression rank.
-
-## Key Mismatch
-
-The prototype simulation output in `riichiElo/sql/LifetimeProgressionSimulation.txt` is based on `riichiElo/sql/Combined.sql`, not directly on the bot's live `rdb2.sql`.
-
-That means we should not copy the output table as authoritative. We should port the calculation to the normalized bot schema and recompute from `GameTable` plus `ParticipantTable`.
-
-## Suggested Implementation Shape
-
-### 1. Add a Lifetime Progression Domain Module
-
-Create a small bot-side module, probably under:
-
-```text
-src/modules/riichidb/lifetime_progression.ts
-```
-
-It should contain:
-
-- Rank rules/constants.
-- `rankName(...)`
-- `rankFloor(...)`
-- `rankForPoints(...)`
-- `applyGame(...)`
-- Types for player lifetime state and leaderboard rows.
-
-Keep the formula outside `riichidb.ts` so commands and profiles can share it.
-
-### 2. Add Database Queries Over Normalized Tables
-
-In `RiichiDatabase`:
-
-- Add a query to fetch all lifetime participant results in chronological order.
-- Join `ParticipantTable` to `GameTable`.
-- Order by `g.date asc, g.game_id asc`.
-- Return rows with `game_id`, `date`, `player_id`, `raw_score`, `adj_score`, `placement`.
-
-The lifetime calculation can be done in TypeScript from these rows.
-
-This avoids adding derived tables at first and keeps the feature easy to tune while the formula is unsettled.
-
-### 3. Add Lifetime Rank Query Helpers
-
-Likely helpers:
-
-- `getLifetimeLeaderboard(limit, offset)`
-- `getLifetimePlayer(player_id)`
-- Maybe `getLifetimePlayers()` internally, if the data set remains small.
-
-The live database is small enough right now: 541 games and 2164 participant rows. Recomputing lifetime progression on command is acceptable initially.
-
-If this grows or becomes slow, add a cached/materialized table later.
-
-### 4. Add User-Facing Command
-
-Add one explicit lifetime command to avoid overloading the existing score leaderboard:
-
-```text
-ron rdb ranks
-```
-
-Possible variants:
-
-```text
-ron rdb ranks
-ron rdb ranks 50
-ron rdb ranks m
-```
-
-Recommended displayed columns:
-
-- rank position
-- player mention
-- lifetime rank name
-- lifetime points
-- games
-- avg adjusted score
-- avg placement
-
-This should probably not use season selectors. It is lifetime by definition.
-
-### 5. Add Lifetime Rank To Profiles
-
-In `playerProfileCreator`, fetch lifetime state for the profiled user in parallel with the existing season-scoped profile data.
-
-Suggested display:
-
-- Rename current profile `Rank` field to `Leaderboard Rank` or `Adj Total Rank`.
-- Add `Lifetime Rank`: `Master (687.8 pts)` or similar.
-
-This avoids confusion between leaderboard placement and progression rank.
-
-### 6. Decide Whether Lifetime Includes All Recorded Seasons
-
-Current product intent says regular recorded games count for lifetime progression, while league games do not. The current database does not have a separate per-game boolean for "counts for lifetime", so the first implementation identifies league games by season id.
-
-Simplest initial rule:
-
-```text
-All games in GameTable count except league seasons whose `season_id` ends with `_L`.
-```
-
-If historical/admin-entered exceptions matter, add a column later, for example:
-
-```sql
-counts_lifetime integer not null default 1
-```
-
-But that migration should only happen if there are known exceptions.
-
-## Implemented Bot Changes
-
-Implemented files:
-
-- `src/modules/riichidb/lifetime_progression.ts`
-- `src/modules/riichidb/query_struct.ts`
-- `src/modules/riichidb/sql_db2.ts`
-- `src/modules/riichidb.ts`
-- `src/templates/playerProfile.ts`
-
-Implemented behavior:
-
-- Added a reusable lifetime progression calculator using the current prototype constants from `riichiElo/sql/simulateLifetime.ts`.
-- Added `RiichiDatabase.getLifetimeGameResults()` over normalized `GameTable` plus `ParticipantTable` rows from `rdb2.sql`.
-- Added `RiichiDatabase.getLifetimeLeaderboard(offset, limit)`.
-- Added `RiichiDatabase.getLifetimePlayer(player_id)`.
-- Added `ron rdb ranks`, with optional amount: `ron rdb ranks 50`.
-- Added `ron rdb ranks all`, currently capped at 100 players.
-- Added lifetime rank to RiichiDB profiles.
-- Renamed the existing profile `Rank` field to `Leaderboard Rank` to distinguish it from lifetime progression rank.
-
-Current command output columns:
-
-```text
-No. | Player | Pts | G | Adj Avg | Avg Pl
-```
-
-Lifetime ranks are grouped by lifetime rank name in the embed description, for example `Celestial` followed by that rank's player rows, then `Saint`, and so on.
-
-Current score submission replies:
-
-```text
-Recorded Game (Season Name)
-1 @player +42.1 | +62.1 -> Master 700/1000
-```
-
-```text
-Recorded League Game (Season Name)
-1 @player +42.1 | #2 | +126.4
-```
-
-Regular submission replies include a compact `Promotions` field when a player crosses a lifetime rank threshold. League submission replies intentionally do not mention lifetime rank.
-
-Lifetime progression currently counts regular games in `GameTable` and excludes league seasons whose `season_id` ends with `_L`.
-
-Verification run:
-
-- `npm run build` passed after the lifetime rank/profile work and again after the score-submit display changes.
-- A direct runtime check against `rdb2.sql` returned valid lifetime leaderboard rows from `RiichiDatabase.getLifetimeLeaderboard(...)`.
+This preserves everyone else's game history and still separates the scrubbed player from their real Discord identity.
 
 ## Open Decisions
 
-- Final formula: use `[20, 10, 0, -30]` as the base placement bonus, with opponent-rank adjustment applied to 4th place only.
-- Whether to include opponent difficulty as an informational column later. The 4th-place formula already uses it; this would only be for display.
-- Whether to add Discord roles for lifetime ranks. This is mentioned in `plan.txt` but is not required for the first bot implementation.
-- Whether the formula should be treated as mutable while testing, or locked once published. The current implementation recomputes from history, so formula changes are retroactive.
+- Whether to replace the current implemented formula with the proposed `30/10/-10/-30 + 0.5 * rank difference` formula.
+- Whether difficulty should apply to every placement, as proposed, or only to losses.
+- Whether lifetime should ignore adjusted score entirely under the proposed formula.
+- Whether rank thresholds need retuning after the formula changes.
+- Whether scrubbed/fake player IDs need special display names in profile and leaderboard output.
+- Whether formula changes should remain retroactive while testing, or become locked once published.
+- Discord roles are intentionally out of scope for now.
 
 ## Risks And Gotchas
 
-- The profile now labels the old total-adjusted leaderboard position as `Leaderboard Rank`; avoid reintroducing a generic `Rank` label there.
-- Recomputing lifetime from historical games means any formula change updates everyone's rank retroactively unless we store snapshots.
-- Permanent floors depend on chronological order. Ordering by date plus game id should be deterministic.
-- Deleting or editing old games can change current lifetime points/ranks if ranks are recomputed live.
-- `riichiElo/sql/simulateLifetime.ts` uses an old schema and should not be dropped directly into the bot.
-- The checked-in `LifetimeProgressionSimulation.txt` may not match the current bot DB.
-
-## Completed Engineering Steps
-
-1. Ported the simulator calculation to a reusable bot-side TypeScript module using normalized participant rows.
-2. Added `RiichiDatabase.getLifetimeGameResults()` plus leaderboard/player helpers.
-3. Added `ron rdb ranks` command.
-4. Added lifetime rank to player profiles and renamed the existing leaderboard rank field.
-5. Ran `npm run build` successfully.
-6. Verified the new lifetime query against live `rdb2.sql` data.
-7. Updated score submission replies to be public and compact: regular submissions show lifetime delta/progress, while league submissions show league rank and adjusted total only.
+- Recomputing lifetime from historical games means formula changes update everyone's rank retroactively.
+- Permanent floors depend on chronological order. Ordering by date plus game id should stay deterministic.
+- Deleting or editing old games can change current lifetime points/ranks.
+- The profile should keep distinguishing lifetime rank from adjusted-score leaderboard rank.
+- Fake scrub IDs may render as broken Discord mentions unless display formatting handles them.
+- Old `riichiElo` prototype files use an older schema and should not be copied directly into the bot.
 
