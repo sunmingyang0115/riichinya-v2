@@ -32,6 +32,7 @@ const MAX_EMBED_DESCRIPTION_LENGTH = 3900;
 const LEAGUE_WEEKLY_GAME_LIMIT = 2;
 const LEAGUE_WEEK_START_DAY = 3;
 const LEAGUE_TIMEZONE = "America/Toronto";
+const HIDDEN_LIFETIME_RANK_PLAYER_IDS = new Set(["1025165997923110974"]);
 const INSERT_SCORES_COMMAND = "Insert Scores";
 const INSERT_LEAGUE_SCORES_COMMAND = "Insert League Scores";
 const LIFETIME_LEADERBOARD_EXPORT_PATH = "tmp/rdb-rank-leaderboard.txt";
@@ -213,9 +214,16 @@ export class RDBModule implements BotModule {
         return new Map(players.filter(player => wanted.has(player.player_id)).map(player => [player.player_id, player]));
     }
 
+    private async getVisibleLifetimeRankLeaderboard(limit: number): Promise<LifetimePlayerState[]> {
+        const players = await RiichiDatabase.getLifetimeLeaderboard(0, Number.MAX_SAFE_INTEGER);
+        return players
+            .filter(player => !HIDDEN_LIFETIME_RANK_PLAYER_IDS.has(player.player_id))
+            .slice(0, limit);
+    }
+
     private async writeLifetimeRankLeaderboardFile(_conf: BotConfig, _client: Client): Promise<void> {
         const [rankRows, statsRows] = await Promise.all([
-            RiichiDatabase.getLifetimeLeaderboard(0, Number.MAX_SAFE_INTEGER),
+            this.getVisibleLifetimeRankLeaderboard(Number.MAX_SAFE_INTEGER),
             RiichiDatabase.getLifetimeLeaderboardStats(),
         ]);
         const statsByPlayer = new Map(statsRows.map(row => [row.player_id, row]));
@@ -576,7 +584,7 @@ export class RDBModule implements BotModule {
         }
         amount = Math.min(amount, MAX_LIFETIME_RANK_AMOUNT);
 
-        const data = await RiichiDatabase.getLifetimeLeaderboard(0, amount);
+        const data = await this.getVisibleLifetimeRankLeaderboard(amount);
         const title = "Lifetime Ranks";
         if (data.length === 0) {
             const eb = new EmbedManager(title, event.client).addContent("No RiichiDB games found.");
