@@ -1,5 +1,4 @@
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
-import { CommandBuilder } from "../data/cmd_manager";
 import { EmbedManager } from "../data/embed_manager";
 import {
 	bold,
@@ -11,15 +10,23 @@ import {
 	inlineCode,
 	Message,
 	spoiler,
+    Client,
+    TextChannel,
+    ButtonInteraction,
+    MessageFlags,
 } from "discord.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import BotProperties from "../../bot_properties.json";
 import dayjs from "dayjs";
 import sharp from "sharp";
 import { analyzeWWYDSituation, WwydAnalysisResult } from "./wwyd/mahjong_api";
+import { BotModule } from "../data/bot_module";
+import { BotRegistrar } from "../data/bot_registrar";
+import { BotConfig } from "../data/bot_config";
+import { CronJob } from "cron";
 
 export const WWYD_DATA_PATH = "wwydData.json";
 export const START_DATE = dayjs("2025-03-16");
+const WWYD_LEADERBOARD_MAX_DESCRIPTION_LENGTH = 3900;
 
 export type GuildMap = {
 	[guildId: string]: {
@@ -94,44 +101,168 @@ export const getWwyd = (wwyds: Wwyd[], date: dayjs.Dayjs) => {
 	return { wwyd: wwyds[index], date: wwydDate, index };
 };
 
-export class WwydCommand implements CommandBuilder {
-	getDocumentation(): string {
-		return new DocBuilder()
-			.addSingleSubCom("ron", ExpectedType.LITERAL, "")
-			.addSingleSubCom("wwyd", ExpectedType.LITERAL, "")
-			.addSingleSubCom("today", ExpectedType.LITERAL, "Get today's wwyd")
-			.back()
-			.addSingleSubCom("random", ExpectedType.LITERAL, "Get random wwyd")
-			.back()
-			.addSingleSubCom(
-				"leaderboard",
-				ExpectedType.LITERAL,
-				"Show WWYD leaderboard for this server"
-			)
-			.addSingleSubCom(
-				"topN",
-				ExpectedType.INTEGER,
-				"Optional: number of rows (default 10)"
-			)
-			.back()
-			.addSingleSubCom("enable", ExpectedType.LITERAL, "")
-			.addSingleSubCom(
-				"channelId",
-				ExpectedType.INTEGER,
-				"Channel id to enable daily WWYD's in."
-			)
-			.back()
-			.addSingleSubCom("disable", ExpectedType.LITERAL, "Disable daily WWYD")
-			.build();
-	}
-	getCommandName(): string {
-		return "wwyd";
-	}
-	getCooldown(): number {
-		return 0;
-	}
+const buttonCustomIDHeader = `testwwyd:guess:`;
 
-	async runCommand(event: Message<boolean>, args: string[]) {
+export class WwydModule implements BotModule {
+
+    // test:wwyd:guess+
+    
+    getCommandName() {
+        return 'wwyd'
+    }
+
+
+    init(ctx: BotRegistrar): void | Promise<void> {
+        ctx.addMessageCommand(this.getCommandName(), this.runCommand.bind(this));
+        ctx.addBotReady(this.botReady.bind(this));
+        ctx.addButton(new RegExp(`${buttonCustomIDHeader}.+`), this.handleButton.bind(this));
+    }
+
+    async botReady(conf: BotConfig, c: Client) {
+    // console.log("Client", c.user!.displayName, "online!");
+    const wwydJob = new CronJob('0 10 * * *', async () => {
+      if (!existsSync(WWYD_DATA_PATH)) {
+        return;
+      }
+      const guilds: GuildMap = JSON.parse(
+        readFileSync(WWYD_DATA_PATH, "utf-8")
+      );
+
+      for (const guildId in guilds) {
+        let guildData = guilds[guildId];
+        
+        const channel = c.channels.cache.get(guildData.channelId) as TextChannel;
+        if (!channel) continue;
+
+        const prevMessage = guildData.currentMessageId;
+        if (prevMessage) {
+          try {
+            const msg = await channel.messages.fetch(prevMessage);
+            if (msg) {
+              // Prepare yesterday's explanation embed and counts content
+              const eb = new EmbedManager("wwyd", c);
+              const analysisEmbed = new EmbedBuilder();
+              let files = await prepareWwydEmbed(eb, analysisEmbed, 1);
+              const dateStr = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+              const dateCounts = guildData.dates?.[dateStr] || {};
+              const entries = Object.entries(dateCounts);
+              const total = entries.reduce((acc, [, c]) => acc + (c as number), 0);
+              entries.sort((a, b) => (b[1] as number) - (a[1] as number));
+              const summary = entries.map(([tile, count]) => `${tile}:${count}`).join(" ");
+              const oneLine = entries.length > 0
+                ? `Results ${dateStr} | ${summary} | Total:${total}`
+                : `Results ${dateStr} | No responses recorded.`;
+              const content = `\`\`\`text\n${oneLine}\n\`\`\``;
+              await msg.edit({ content, embeds: [eb, analysisEmbed], files, components: []});
+            }
+          } catch (e) {
+            console.log("Failed to fetch previous WWYD message:", e);
+          }
+        }
+
+        // Daily mode with buttons
+        const eb = new EmbedBuilder();
+        const { embeds, files, components } = await buildDailyWwydMessage(eb);
+        const sent = await channel.send({ embeds, files, components });
+        // Update the current message ID using the sent message
+        guilds[guildId].currentMessageId = sent.id;
+
+      }
+
+      writeFileSync(WWYD_DATA_PATH, JSON.stringify(guilds, null, 2), "utf-8");
+    },
+    null,
+    true,
+    "America/Toronto"
+  );
+    wwydJob.start();
+    }
+
+    async handleButton(conf: BotConfig, interaction: ButtonInteraction) {
+        // Parse: wwyd:guess:YYYY-MM-DD:<tile>
+            const parts = interaction.customId.split(":");
+            const date = parts[2];
+            const tile = parts[3];
+
+            // Only allow the currently active WWYD window (10:00 -> next day's 10:00)
+            const now = dayjs();
+            const activeDateStr = toWwydDate(now).format("YYYY-MM-DD");
+            if (date !== activeDateStr) {
+                await interaction.deferUpdate();
+                return;
+            }
+
+            // Acknowledge quickly; we'll edit the reply after processing
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            // Load problem for the date encoded in the button
+            const wwyds = JSON.parse(readFileSync("assets/wwyd-new.json", "utf-8"));
+            const idx = Math.max(0, Math.min(wwyds.length - 1, dayjs(date).diff(START_DATE, 'day')));
+            const wwyd = wwyds[idx];
+
+            // Load and normalize the guild store once
+            const gid = interaction.guildId!;
+            const uid = interaction.user.id;
+            let store: GuildMap = existsSync(WWYD_DATA_PATH)
+                ? JSON.parse(readFileSync(WWYD_DATA_PATH, "utf-8"))
+                : ({} as any);
+            store[gid] ??= { channelId: "", players: {}, currentMessageId: "", dates: {} } as any;
+            const g = store[gid];
+            const u = (g.players[uid] ??= { attempts: 0, correct: 0, datesAttempted: [] } as any);
+
+            
+            
+            let alreadyAttempted = !!(u.datesAttempted && u.datesAttempted.includes(date));
+            if (tile === "pass" && !alreadyAttempted) {
+                u.datesAttempted.push(date);
+                writeFileSync(WWYD_DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
+                alreadyAttempted = true;
+            }
+            if (alreadyAttempted) {
+                const eb = new EmbedManager("wwyd", interaction.client);
+                const explanationEmbed = new EmbedBuilder();
+                const files = await prepareWwydEmbed(eb, explanationEmbed, 0);
+                await interaction.editReply({ content: "", embeds: [eb, explanationEmbed], files });
+            }
+            else {
+                const correct = tile === wwyd.answer;
+
+                u.attempts = (u.attempts ?? 0) + 1;
+
+                let message = "";
+                if (correct) {
+
+                
+                    u.correct = (u.correct ?? 0) + 1;
+
+                    message = `✅ Correct! Currently ${u.correct}/${u.attempts} points`;
+
+                    // Public announcement in the same channel
+                    const channel: any = interaction.client.channels.cache.get(interaction.channelId!);
+                    if (channel) {
+                        await channel.send(`<@${interaction.user.id}> was correct! (${u.correct} points)`);
+                    }
+                } else {
+                    message = `❌ Incorrect. Currently ${u.correct}/${u.attempts} points`;
+                }
+                // Add explanation embeds
+                const eb = new EmbedManager("wwyd", interaction.client);
+                const explanationEmbed = new EmbedBuilder();
+                const files = await prepareWwydEmbed(eb, explanationEmbed, 0);
+                await interaction.editReply({ content: message, embeds: [eb, explanationEmbed], files });
+
+                
+                const counts = (g.dates[date] ??= {} as any);
+                counts[tile] = (counts[tile] ?? 0) + 1;
+                u.datesAttempted.push(date);
+                writeFileSync(WWYD_DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
+                
+                return;
+            
+            }
+    }
+
+	async runCommand(conf: BotConfig, event: Message<boolean>, args: string[]) {
 		const eb = new EmbedManager(this.getCommandName(), event.client);
 
 		if (args.length === 0) {
@@ -145,7 +276,7 @@ export class WwydCommand implements CommandBuilder {
 		}
 
 		if (["enable", "disable", "testtoday"].includes(args[0])) {
-			if (!BotProperties.writeAccess.includes(event.author.id)) {
+			if (!conf.writeAccess.includes(event.author.id)) {
 				return;
 			}
 		}
@@ -250,11 +381,38 @@ export class WwydCommand implements CommandBuilder {
 				rank++;
 			}
 
-			eb.setTitle("WWYD Leaderboard");
-			eb.addContent(lines.join("\n"));
-			eb.setFooter({ text: "Only users with at least 50% accuracy or at least 5 correct answers are shown." });
-			event.reply({ embeds: [eb] });
+			const chunks = this.chunkLines(lines, WWYD_LEADERBOARD_MAX_DESCRIPTION_LENGTH);
+			const embeds = chunks.map((chunk, index) => {
+				const embed = new EmbedManager(
+					index === 0 ? "WWYD Leaderboard" : `WWYD Leaderboard (${index + 1})`,
+					event.client,
+				);
+				embed.addContent(chunk);
+				embed.setFooter({ text: "Only users with at least 50% accuracy or at least 5 correct answers are shown." });
+				return embed;
+			});
+			event.reply({ embeds });
 		}
+	}
+
+	private chunkLines(lines: string[], maxLength: number): string[] {
+		const chunks: string[] = [];
+		let current = "";
+
+		for (const line of lines) {
+			const next = current.length === 0 ? line : `${current}\n${line}`;
+			if (next.length > maxLength && current.length > 0) {
+				chunks.push(current);
+				current = line;
+			} else {
+				current = next;
+			}
+		}
+
+		if (current.length > 0) {
+			chunks.push(current);
+		}
+		return chunks;
 	}
 }
 
@@ -543,14 +701,14 @@ export const buildDailyWwydMessage = async (embed: EmbedBuilder) => {
 	};
 	const buttons = uniqueTiles.map((t) =>
 		new ButtonBuilder()
-			.setCustomId(`wwyd:guess:${dateStr}:${t}`)
+			.setCustomId(`${buttonCustomIDHeader}${dateStr}:${t}`)
 			.setLabel(t)
 			.setStyle(suitToStyle(t))
 	);
 
 	buttons.push(
 		new ButtonBuilder()
-			.setCustomId(`wwyd:guess:${dateStr}:pass`)
+			.setCustomId(`${buttonCustomIDHeader}${dateStr}:pass`)
 			.setLabel("Pass")
 			.setStyle(ButtonStyle.Secondary)
 	);

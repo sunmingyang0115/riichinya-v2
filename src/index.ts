@@ -3,6 +3,12 @@ import { Bot } from './data/bot';
 import { REST, Routes, ContextMenuCommandBuilder, ApplicationCommandType } from 'discord.js';
 import BotProperties from '../bot_properties.json'
 import assert from 'assert';
+import { PingModule } from './modules/ping';
+import { TestModule } from './modules/test';
+import { BotConfig } from './data/bot_config';
+import { RDBModule } from './modules/riichidb';
+import { WwydModule } from './modules/wwyd';
+import { MjsModule } from './modules/mjs';
 
 
 assert(process.env.TOKEN != undefined, "add TOKEN=<the bot token> in .env");
@@ -12,8 +18,16 @@ assert(BotProperties.writeAccess != undefined, "add writeAccess = ['userid1', ..
 assert(BotProperties.prefix != undefined, "add prefix = <bot prefix> field in bot_properties");
 assert(BotProperties.helpPrefix != undefined, "add helpPrefix = <bot help prefix> field in bot_properties");
 
-const riichinya = new Bot(process.env.TOKEN);
-restShenanigans();
+const riichinya = new Bot(process.env.TOKEN, BotProperties as BotConfig);
+const modules = [
+    new PingModule(),
+    new TestModule(),
+    new RDBModule(),
+    new WwydModule(),
+    new MjsModule()
+];
+modules.forEach(m => m.init(riichinya))
+
 riichinya.run();
 
 // error handling
@@ -23,19 +37,19 @@ process.on('unhandledRejection', (error) => {
     console.error('Unhandled Error', error);
 });
 
-async function restShenanigans() {
-    const commandData = [
-        new ContextMenuCommandBuilder()
-        .setName('Insert Scores')
-        .setType(ApplicationCommandType.Message)
-    ];
-    console.log('Started refreshing application (/) commands.');
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN!);
-    for (let guildid of BotProperties.activeGuilds) {
-        await rest.put(
-            Routes.applicationGuildCommands(process.env.CLIENT_ID!, guildid),
-            { body : commandData },
-        );
-        console.log(`Successfully reloaded application commands for guild ${guildid}.`);
-    }
-};
+// async function restShenanigans() {
+//     const commandData = [
+//         new ContextMenuCommandBuilder()
+//         .setName('Insert Scores')
+//         .setType(ApplicationCommandType.Message)
+//     ];
+//     console.log('Started refreshing application (/) commands.');
+//     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN!);
+//     for (let guildid of BotProperties.activeGuilds) {
+//         await rest.put(
+//             Routes.applicationGuildCommands(process.env.CLIENT_ID!, guildid),
+//             { body : commandData },
+//         );
+//         console.log(`Successfully reloaded application commands for guild ${guildid}.`);
+//     }
+// };

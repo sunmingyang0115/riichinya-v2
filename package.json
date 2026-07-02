@@ -4,9 +4,10 @@
   "description": "Declare Riichi as soon as possible. Fast attack for the win!",
   "main": "build/index.js",
   "scripts": {
-    "run": "tsx run src/index.ts",
+    "run": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "migrate:rdb": "tsx src/scripts/migrate_riichidb.ts",
     "start": "node ."
   },
   "dependencies": {
@@ -14,7 +15,7 @@
     "axios": "^1.7.9",
     "cron": "^4.1.0",
     "dayjs": "^1.11.13",
-    "discord.js": "^14.19.3",
+    "discord.js": "14.23.2",
     "dotenv": "^16.4.5",
     "json2csv": "^6.0.0-alpha.2",
     "sharp": "^0.33.5",
