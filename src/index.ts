@@ -9,6 +9,7 @@ import { BotConfig } from './data/bot_config';
 import { RDBModule } from './modules/riichidb';
 import { WwydModule } from './modules/wwyd';
 import { MjsModule } from './modules/mjs';
+import { MakeTable } from './modules/maketable';
 
 
 assert(process.env.TOKEN != undefined, "add TOKEN=<the bot token> in .env");
@@ -24,7 +25,8 @@ const modules = [
     new TestModule(),
     new RDBModule(),
     new WwydModule(),
-    new MjsModule()
+    new MjsModule(),
+    new MakeTable()
 ];
 modules.forEach(m => m.init(riichinya))
 
