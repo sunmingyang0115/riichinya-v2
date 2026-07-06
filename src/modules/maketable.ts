@@ -36,10 +36,10 @@ export class MakeTable implements BotModule {
             msg += 
 `
 Table ${n+1}.
-East:  ${uniqueUsernames[n+0]}
-West:  ${uniqueUsernames[n+1]}
-South: ${uniqueUsernames[n+2]}
-North: ${uniqueUsernames[n+3]}
+East:  ${uniqueUsernames[4*n+0]}
+West:  ${uniqueUsernames[4*n+1]}
+South: ${uniqueUsernames[4*n+2]}
+North: ${uniqueUsernames[4*n+3]}
 
 `;
         }
