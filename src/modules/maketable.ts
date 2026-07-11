@@ -37,8 +37,8 @@ export class MakeTable implements BotModule {
 `
 Table ${n+1}.
 East:  ${uniqueUsernames[4*n+0]}
-West:  ${uniqueUsernames[4*n+1]}
-South: ${uniqueUsernames[4*n+2]}
+South:  ${uniqueUsernames[4*n+1]}
+West: ${uniqueUsernames[4*n+2]}
 North: ${uniqueUsernames[4*n+3]}
 
 `;
