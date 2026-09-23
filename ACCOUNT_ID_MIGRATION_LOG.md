@@ -1,0 +1,8 @@
+# Account ID Migration Log
+
+**IF YOU ARE MAKING CHANGES THAT MAY BE REVERTED, PLEASE MAKE SURE YOU ADD DATA IF NEEDED SO ITS REVERTIBLE**
+
+## 2026-06-27
+
+- Replaced Discord account ID `629128689711579167` with `1489165382894751908` in `rdb2.sql`.
+    - Reason: account switch.

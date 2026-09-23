@@ -71,3 +71,20 @@ export interface PlayerComparisonGame {
     player2_placement: number;
 };
 
+export interface LifetimeGameResultRow {
+    game_id: string;
+    date: string;
+    player_id: string;
+    raw_score: number;
+    adj_score: number;
+    placement: number;
+    target: number;
+    oka: number;
+};
+
+export interface SeasonAdjustedStanding {
+    player_id: string;
+    score_adj_total: number;
+    rank: number;
+};
+

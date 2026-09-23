@@ -3,4 +3,5 @@
 export interface BotConfig {
     activeGuilds: string[],
     writeAccess: string[],
+    roleWriteAccess: string[],
 }

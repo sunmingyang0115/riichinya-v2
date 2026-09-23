@@ -1,33 +1,42 @@
-import { Message, Client, AttachmentBuilder, Collection, MessageContextMenuCommandInteraction, MessageFlags, ContextMenuCommandBuilder, ApplicationCommandType } from "discord.js";
+import { Message, Client, AttachmentBuilder, Collection, MessageContextMenuCommandInteraction, ContextMenuCommandBuilder, ApplicationCommandType } from "discord.js";
 import { DocBuilder, ExpectedType } from "../data/doc_manager";
 import dayjs, { Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 // import { DataGameSQLEntry, DataPlayerSQLEntry, playerDataAttr, RiichiDatabase } from "./riichidb/sql_db2";
-import { parseScoreFromRaw } from "./riichidb/score_parser2";
+import { GameInfoEntry, parseScoreFromRaw } from "./riichidb/score_parser2";
 import { EmbedManager, Header } from "../data/embed_manager";
 import { parse } from "json2csv";
 import { playerProfileCreator, PlayerProfileScope } from "../templates/playerProfile";
 import { RiichiDatabase } from "./riichidb/sql_db2";
 import { GameEntry, ParticipantEntry, SeasonEntry } from "./riichidb/db_struct";
-import { LeaderboardStatKey } from "./riichidb/query_struct";
+import { LeaderboardStatKey, SeasonAdjustedStanding } from "./riichidb/query_struct";
 import BotProperties from "../../bot_properties.json"
 import { BotModule } from "../data/bot_module";
 import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
+import { hasWriteAccess } from "../data/write_access";
+import { calculateLifetimeGameDeltas, LifetimePlayerState } from "./riichidb/lifetime_progression";
+import { mkdirSync, writeFileSync } from "fs";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-type SeasonSelectorType = "all" | "current" | "league" | "season";
+type SeasonSelectorType = "default" | "all" | "current" | "league" | "season";
+type DefaultSeasonScope = "all" | "league";
 const DEFAULT_LEADERBOARD_AMOUNT = 50;
+const DEFAULT_LIFETIME_RANK_AMOUNT = 30;
 const MAX_FIELD_LEADERBOARD_AMOUNT = 40;
 const MAX_MOBILE_LEADERBOARD_AMOUNT = 100;
+const MAX_LIFETIME_RANK_AMOUNT = 100;
+const MAX_EMBED_DESCRIPTION_LENGTH = 3900;
 const LEAGUE_WEEKLY_GAME_LIMIT = 2;
 const LEAGUE_WEEK_START_DAY = 3;
 const LEAGUE_TIMEZONE = "America/Toronto";
+const HIDDEN_LIFETIME_RANK_PLAYER_IDS = new Set(["1025165997923110974"]);
 const INSERT_SCORES_COMMAND = "Insert Scores";
 const INSERT_LEAGUE_SCORES_COMMAND = "Insert League Scores";
+const LIFETIME_LEADERBOARD_EXPORT_PATH = "tmp/rdb-rank-leaderboard.txt";
 
 interface ParsedSeasonArgs {
     scope: PlayerProfileScope;
@@ -39,6 +48,11 @@ interface LeagueWeekWindow {
     end: Dayjs;
 }
 
+interface PromotionAnnouncement {
+    playerId: string;
+    rankName: string;
+}
+
 export class RDBModule implements BotModule {
 
     init(ctx: BotRegistrar): void | Promise<void> {
@@ -48,6 +62,7 @@ export class RDBModule implements BotModule {
             .setType(ApplicationCommandType.Message);
 
         ctx.addMessageCommand('rdb', this.runCommand.bind(this));
+        ctx.addBotReady(this.writeLifetimeRankLeaderboardFile.bind(this));
         ctx.addMessageContextMenu(rest.toJSON(), INSERT_SCORES_COMMAND, this.messageCtxHandler.bind(this));
 
         const rest_league = new ContextMenuCommandBuilder()
@@ -57,7 +72,6 @@ export class RDBModule implements BotModule {
     }
 
     async messageCtxHandler(conf: BotConfig, interaction: MessageContextMenuCommandInteraction) {
-        if (!conf.writeAccess.includes(interaction.user.id)) return;
             let str = interaction.targetMessage.content;
             
             //make sure the message mentions 4 users
@@ -75,10 +89,16 @@ export class RDBModule implements BotModule {
         
             // await RiichiDatabase.insertData(gameid, parseScoreFromRaw(splice));
             const cur_season = await this.getInsertSeason(interaction.commandName);
-            let content = `Successful id:${gameid} (${cur_season.display_name})`;
+            const isLeagueSubmission = interaction.commandName === INSERT_LEAGUE_SCORES_COMMAND;
             const gameinfo = parseScoreFromRaw(splice, cur_season);
-            console.log(gameinfo.length)
-            // add scores
+            const playerIds = gameinfo.map(player => player.id);
+            const beforeLifetime = isLeagueSubmission
+                ? new Map<string, LifetimePlayerState>()
+                : await this.getLifetimeStateMap(playerIds);
+            const beforeLeagueStandings = isLeagueSubmission
+                ? await this.getSeasonAdjustedStandingMap(cur_season.season_id)
+                : new Map<string, SeasonAdjustedStanding>();
+
             await RiichiDatabase.addGame({
                 "game_id": gameid,
                 "date": interaction.targetMessage.createdAt.toISOString(),
@@ -99,19 +119,43 @@ export class RDBModule implements BotModule {
             } else {
                 await interaction.targetMessage.react("🏆")
             }
-            await interaction.reply({
-                embeds : [new EmbedManager("rdb", interaction.client).addContent(content)],
-                flags: MessageFlags.Ephemeral
-            });
+            if (isLeagueSubmission) {
+                const embed = this.createLeagueScoreSubmitEmbed(
+                    cur_season,
+                    gameinfo,
+                    beforeLeagueStandings,
+                    await this.getSeasonAdjustedStandingMap(cur_season.season_id),
+                    interaction.client,
+                );
+                await interaction.reply({ embeds: [embed] });
+                return;
+            }
+
+            const result = this.createRegularScoreSubmitEmbed(
+                    cur_season,
+                    gameinfo,
+                    beforeLifetime,
+                    await this.getLifetimeStateMap(playerIds),
+                    interaction.client,
+                );
+            await interaction.reply({ embeds: [result.embed] });
+            for (const promotion of result.promotions) {
+                await interaction.followUp({
+                    content: `🎉 <@${promotion.playerId}> promoted to **${promotion.rankName}**!`,
+                    allowedMentions: { users: [promotion.playerId] },
+                });
+            }
         
     }
     
     
     async runCommand(conf: BotConfig, event: Message<boolean>, args: string[]): Promise<void> {
-        const is_admin = conf.writeAccess.includes(event.author.id);
+        const is_admin = hasWriteAccess(conf, event.author.id, event.member);
 
         if (args[0] === "me") {
             await this.replyWithPlayerProfile(event, event.author, args.slice(1));
+        } else if (args[0] === "ranks" || args[0] === "rank") {
+            await this.replyWithLifetimeRanks(event, args.slice(1));
         } else if (args[0] === "game") {
             const id = this.cleanDiscordId(args[1] ?? "");
             if (!/^\d+$/.test(id)) {
@@ -179,8 +223,164 @@ export class RDBModule implements BotModule {
         }
     }
 
+    private async getLifetimeStateMap(playerIds: string[]): Promise<Map<string, LifetimePlayerState>> {
+        const wanted = new Set(playerIds);
+        const players = await RiichiDatabase.getLifetimeLeaderboard(0, Number.MAX_SAFE_INTEGER);
+        return new Map(players.filter(player => wanted.has(player.player_id)).map(player => [player.player_id, player]));
+    }
+
+    private async getVisibleLifetimeRankLeaderboard(limit: number): Promise<LifetimePlayerState[]> {
+        const players = await RiichiDatabase.getLifetimeLeaderboard(0, Number.MAX_SAFE_INTEGER);
+        return players
+            .filter(player => !HIDDEN_LIFETIME_RANK_PLAYER_IDS.has(player.player_id))
+            .slice(0, limit);
+    }
+
+    private async writeLifetimeRankLeaderboardFile(_conf: BotConfig, _client: Client): Promise<void> {
+        const [rankRows, statsRows] = await Promise.all([
+            this.getVisibleLifetimeRankLeaderboard(Number.MAX_SAFE_INTEGER),
+            RiichiDatabase.getLifetimeLeaderboardStats(),
+        ]);
+        const statsByPlayer = new Map(statsRows.map(row => [row.player_id, row]));
+        const lines = [
+            `Generated\t${new Date().toISOString()}`,
+            "Scope\tRegular games only; excludes league seasons ending in _L",
+            "",
+            [
+                "No",
+                "Player",
+                "Rank",
+                "Pts",
+                "Limit",
+                "Start",
+                "DemoteTo",
+                "RA",
+                "SAT",
+                "SRT",
+                "SAA",
+                "SRA",
+                "RT",
+                "GT",
+                "Promotions",
+            ].join("\t"),
+            ...rankRows.map((player, index) => {
+                const stats = statsByPlayer.get(player.player_id);
+                return [
+                    index + 1,
+                    player.player_id,
+                    player.rank_name,
+                    this.formatLifetimePoints(player.points),
+                    this.formatLifetimeLimit(player.rank_limit),
+                    this.formatLifetimePoints(player.rank_start),
+                    player.demote_points === null ? "" : this.formatLifetimePoints(player.demote_points),
+                    this.formatExportNumber(stats?.rank_average ?? player.rank_average, 2),
+                    this.formatExportNumber(stats?.score_adj_total ?? player.total_adjusted_score / 1000, 1),
+                    this.formatExportNumber(stats?.score_raw_total ?? 0, 1),
+                    this.formatExportNumber(stats?.score_adj_average ?? player.score_adj_average, 1),
+                    this.formatExportNumber(stats?.score_raw_average ?? 0, 1),
+                    this.formatExportNumber(stats?.rank_total ?? player.total_placement, 0),
+                    this.formatExportNumber(stats?.game_total ?? player.games, 0),
+                    player.promotions,
+                ].join("\t");
+            }),
+        ];
+
+        mkdirSync("tmp", { recursive: true });
+        writeFileSync(LIFETIME_LEADERBOARD_EXPORT_PATH, lines.join("\n"));
+        console.log(`Wrote ${LIFETIME_LEADERBOARD_EXPORT_PATH}`);
+    }
+
+    private async getSeasonAdjustedStandingMap(seasonId: string): Promise<Map<string, SeasonAdjustedStanding>> {
+        const standings = await RiichiDatabase.getSeasonAdjustedStandings(seasonId);
+        return new Map(standings.map(standing => [standing.player_id, standing]));
+    }
+
+    private createRegularScoreSubmitEmbed(
+        season: SeasonEntry,
+        gameinfo: GameInfoEntry[],
+        beforeLifetime: Map<string, LifetimePlayerState>,
+        afterLifetime: Map<string, LifetimePlayerState>,
+        client: Client,
+    ): { embed: EmbedManager; promotions: PromotionAnnouncement[] } {
+        const eb = new EmbedManager(`Recorded Game (${season.display_name})`, client);
+        const promotions: PromotionAnnouncement[] = [];
+        const lifetimeDeltas = calculateLifetimeGameDeltas(gameinfo.map(player => ({
+            game_id: "",
+            player_id: player.id,
+            raw_score: player.scoreRaw,
+            placement: player.placement,
+            target: season.target,
+            oka: season.oka,
+            rank: beforeLifetime.get(player.id)?.rank ?? 1,
+        })));
+        const lines = gameinfo.map(player => {
+            const before = beforeLifetime.get(player.id);
+            const after = afterLifetime.get(player.id);
+            const delta = lifetimeDeltas.get(player.id) ?? 0;
+
+            if (after && after.rank > (before?.rank ?? 1)) {
+                promotions.push({ playerId: player.id, rankName: after.rank_name });
+            }
+
+            return `${player.placement} <@${player.id}> | ${this.formatSignedFixed(delta, 0)} -> ${after ? this.formatLifetimeRankProgressCompact(after) : "Unranked"}`;
+        });
+
+        eb.addContent(lines.join("\n"));
+        return { embed: eb, promotions };
+    }
+
+    private createLeagueScoreSubmitEmbed(
+        season: SeasonEntry,
+        gameinfo: GameInfoEntry[],
+        beforeStandings: Map<string, SeasonAdjustedStanding>,
+        afterStandings: Map<string, SeasonAdjustedStanding>,
+        client: Client,
+    ): EmbedManager {
+        const eb = new EmbedManager(`Recorded League Game (${season.display_name})`, client);
+        const lines = gameinfo.map(player => {
+            const before = beforeStandings.get(player.id);
+            const after = afterStandings.get(player.id);
+            const leagueRank = after
+                ? before
+                    ? before.rank !== after.rank
+                        ? `#${before.rank} -> #${after.rank}`
+                        : `#${after.rank}`
+                    : `N/A -> #${after.rank}`
+                : "N/A";
+            const leagueTotal = after ? this.formatSignedFixed(after.score_adj_total, 1) : "N/A";
+
+            return `${player.placement}${this.ordinalSuffix(player.placement)} <@${player.id}> | ${this.formatSignedFixed(player.scoreAdj / 1000, 1)} | ${leagueRank} | total ${leagueTotal}`;
+        });
+        eb.addContent(lines.join("\n"));
+        return eb;
+    }
+
+    private formatLifetimeRankProgressCompact(player: LifetimePlayerState): string {
+        return `${player.rank_name} ${this.formatLifetimeProgress(player)}`;
+    }
+
+    private formatLifetimePoints(points: number): string {
+        return String(Math.trunc(points));
+    }
+
+    private formatLifetimeLimit(limit: number | null): string {
+        return limit === null ? "" : this.formatLifetimePoints(limit);
+    }
+
+    private formatLifetimeProgress(player: LifetimePlayerState): string {
+        const points = this.formatLifetimePoints(player.points);
+        if (player.rank_limit === null) {
+            return points;
+        }
+        return `${points}/${this.formatLifetimePoints(player.rank_limit)}`;
+    }
+
+    private formatExportNumber(value: number, digits: number): string {
+        return value.toFixed(digits);
+    }
+
     private async replyWithPlayerProfile(event: Message<boolean>, user: Message<boolean>["author"], args: string[]): Promise<void> {
-        const parsed = await this.parseSeasonScope(args);
+        const parsed = await this.parseSeasonScope(args, "all");
         if (parsed.args.length > 0) {
             throw new Error(`Unexpected argument(s): ${parsed.args.join(" ")}`);
         }
@@ -190,7 +390,7 @@ export class RDBModule implements BotModule {
     }
 
     private async replyWithMentionShortcut(event: Message<boolean>, args: string[]): Promise<boolean> {
-        const parsed = await this.parseSeasonScope(args);
+        const parsed = await this.parseSeasonScope(args, "all");
         const mentionArgs = parsed.args.filter(arg => this.isDiscordMention(arg));
 
         if (mentionArgs.length === 0) {
@@ -376,6 +576,43 @@ export class RDBModule implements BotModule {
         };
     }
 
+    private async replyWithLifetimeRanks(event: Message<boolean>, args: string[]): Promise<void> {
+        let amount = DEFAULT_LIFETIME_RANK_AMOUNT;
+
+        for (const arg of args) {
+            if (arg === "all") {
+                amount = MAX_LIFETIME_RANK_AMOUNT;
+                continue;
+            }
+            if (!Number.isNaN(Number(arg)) && Number.isInteger(Number(arg))) {
+                amount = Number(arg);
+                continue;
+            }
+            throw new Error("Usage: `ron rdb ranks [amount]` or `ron rdb ranks all`.");
+        }
+
+        if (amount < 1) {
+            throw new Error("Lifetime rank amount must be at least 1.");
+        }
+        amount = Math.min(amount, MAX_LIFETIME_RANK_AMOUNT);
+
+        const data = await this.getVisibleLifetimeRankLeaderboard(amount);
+        const title = "Lifetime Ranks";
+        if (data.length === 0) {
+            const eb = new EmbedManager(title, event.client).addContent("No RiichiDB games found.");
+            await event.reply({ embeds: [eb] });
+            return;
+        }
+
+        const header = "No. | Player | Pts";
+        const chunks = this.formatLifetimeRankChunks(data, header, MAX_EMBED_DESCRIPTION_LENGTH);
+        const embeds = chunks.map((chunk, index) =>
+            new EmbedManager(index === 0 ? title : `${title} (${index + 1})`, event.client).addContent(chunk)
+        );
+
+        await event.reply({ embeds });
+    }
+
     private async replyWithLeaderboard(event: Message<boolean>, args: string[]): Promise<void> {
         const parsed = await this.parseSeasonScope(args);
         let leaderboardArgs = parsed.args;
@@ -496,13 +733,13 @@ export class RDBModule implements BotModule {
         return season;
     }
 
-    private async parseSeasonScope(args: string[]): Promise<ParsedSeasonArgs> {
-        let selectorType: SeasonSelectorType = "all";
+    private async parseSeasonScope(args: string[], defaultScope: DefaultSeasonScope = "league"): Promise<ParsedSeasonArgs> {
+        let selectorType = "default" as SeasonSelectorType;
         let selectedSeasonId = "";
         const remaining: string[] = [];
 
         const setSelector = (type: SeasonSelectorType, seasonId = "") => {
-            if (selectorType !== "all") {
+            if (selectorType !== "default") {
                 throw new Error("Use only one season selector.");
             }
             selectorType = type;
@@ -511,7 +748,9 @@ export class RDBModule implements BotModule {
 
         for (let i = 0; i < args.length; i++) {
             const arg = args[i];
-            if (arg === "--current" || arg === "-c") {
+            if (arg === "--all" || arg === "-a") {
+                setSelector("all");
+            } else if (arg === "--current" || arg === "-c") {
                 setSelector("current");
             } else if (arg === "--league" || arg === "-l") {
                 setSelector("league");
@@ -532,23 +771,23 @@ export class RDBModule implements BotModule {
             }
         }
 
-        if (selectorType === "all") {
+        if ((selectorType === "default" && defaultScope === "all") || selectorType === "all") {
             return {
                 scope: { season_id: null, display_name: "All Seasons" },
                 args: remaining,
             };
         }
 
-        if (selectorType === "current") {
-            const season = await this.getCurrentSeasonOrThrow();
+        if (selectorType === "default" || selectorType === "league") {
+            const season = await this.getCurrentLeagueSeasonOrThrow();
             return {
                 scope: { season_id: season.season_id, display_name: season.display_name },
                 args: remaining,
             };
         }
 
-        if (selectorType === "league") {
-            const season = await this.getCurrentLeagueSeasonOrThrow();
+        if (selectorType === "current") {
+            const season = await this.getCurrentSeasonOrThrow();
             return {
                 scope: { season_id: season.season_id, display_name: season.display_name },
                 args: remaining,
@@ -580,6 +819,50 @@ export class RDBModule implements BotModule {
             throw new Error("Current RiichiDB league season is not set. Run `ron rdb set_current_league_season S26_L`.");
         }
         return season;
+    }
+
+    private formatLifetimeRankChunks(
+        players: LifetimePlayerState[],
+        header: string,
+        maxLength: number,
+    ): string[] {
+        const chunks: string[] = [];
+        let current = header;
+        let previousRank = "";
+
+        const appendLine = (line: string, rankName?: string) => {
+            const next = `${current}\n${line}`;
+            if (next.length > maxLength && current !== header) {
+                chunks.push(current);
+                current = rankName ? `${header}\n${rankName}\n${line}` : `${header}\n${line}`;
+            } else {
+                current = next;
+            }
+        };
+
+        players.forEach((player, index) => {
+            if (player.rank_name !== previousRank) {
+                appendLine(`**${player.rank_name}**`);
+                previousRank = player.rank_name;
+            }
+
+            appendLine([
+                String(index + 1),
+                `<@${player.player_id}>`,
+                this.formatLifetimeProgress(player),
+            ].join(" | "), `**${player.rank_name}**`);
+        });
+
+        if (current.length > 0) {
+            chunks.push(current);
+        }
+
+        return chunks;
+    }
+
+    private formatSignedFixed(value: number, digits: number): string {
+        const formatted = value.toFixed(digits);
+        return value > 0 ? `+${formatted}` : formatted;
     }
 
     private cleanDiscordId(id: string): string {

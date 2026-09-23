@@ -2,6 +2,7 @@ import { ApplicationCommandType, Collection, ContextMenuCommandBuilder, MessageC
 import { BotModule } from "../data/bot_module";
 import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
+import { hasWriteAccess } from "../data/write_access";
 
 export class MakeTable implements BotModule {
     MAKE_TABLE_COMMAND = "Make Tables";
@@ -14,7 +15,7 @@ export class MakeTable implements BotModule {
     }
 
     async messageCtxHandler(conf: BotConfig, interaction: MessageContextMenuCommandInteraction) {
-        if (!conf.writeAccess.includes(interaction.user.id)) return;
+        if (!hasWriteAccess(conf, interaction.user.id, interaction.member)) return;
         await interaction.deferReply();
 
         const reactions = Array.from(interaction.targetMessage.reactions.cache.values());

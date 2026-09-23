@@ -22,6 +22,7 @@ import { analyzeWWYDSituation, WwydAnalysisResult } from "./wwyd/mahjong_api";
 import { BotModule } from "../data/bot_module";
 import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
+import { hasWriteAccess } from "../data/write_access";
 import { CronJob } from "cron";
 
 export const WWYD_DATA_PATH = "wwydData.json";
@@ -276,7 +277,7 @@ export class WwydModule implements BotModule {
 		}
 
 		if (["enable", "disable", "testtoday"].includes(args[0])) {
-			if (!conf.writeAccess.includes(event.author.id)) {
+			if (!hasWriteAccess(conf, event.author.id, event.member)) {
 				return;
 			}
 		}

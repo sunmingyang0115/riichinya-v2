@@ -19,12 +19,14 @@ Create `bot_properties.json` in project root folder
     {
       "activeGuilds": [...],
       "writeAccess": [...],
+      "roleWriteAccess": [...],
       "prefix": ...,
       "helpPrefix": ...
     }
 
 - activeGuilds - list of discord guild ids to be registered for discord interaction (Used for score insertion)
-- writeAccess - list of discord user ids that have permission to use insert scores
+- writeAccess - list of discord user ids that have permission to use admin commands
+- roleWriteAccess - list of discord role ids whose members have permission to use admin commands
 - prefix - the bot prefix for general commands
 - helpPrefix - the bot prefix for documentation
 

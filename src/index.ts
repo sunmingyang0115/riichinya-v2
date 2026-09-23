@@ -16,6 +16,7 @@ assert(process.env.TOKEN != undefined, "add TOKEN=<the bot token> in .env");
 assert(process.env.CLIENT_ID != undefined, "add CLIENT_ID=<the bot client id> in .env");
 assert(BotProperties.activeGuilds != undefined, "add activeGuilds = ['guildid1', ...] field in bot_properties (used for loading interactions to appropriate)");
 assert(BotProperties.writeAccess != undefined, "add writeAccess = ['userid1', ...] field in bot_properties (used for gatekeeping write permission in db)");
+assert(BotProperties.roleWriteAccess != undefined, "add roleWriteAccess = ['roleid1', ...] field in bot_properties (used for gatekeeping write permission by role)");
 assert(BotProperties.prefix != undefined, "add prefix = <bot prefix> field in bot_properties");
 assert(BotProperties.helpPrefix != undefined, "add helpPrefix = <bot help prefix> field in bot_properties");
 
