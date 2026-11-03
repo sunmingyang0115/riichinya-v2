@@ -4,6 +4,24 @@ import { BotRegistrar } from "../data/bot_registrar";
 import { BotConfig } from "../data/bot_config";
 import { hasWriteAccess } from "../data/write_access";
 
+function shuffle<T>(array: T[]): T[] {
+    let currentIndex = array.length,  randomIndex;
+
+    // While there remain elements to shuffle.
+    while (currentIndex != 0) {
+  
+      // Pick a remaining element.
+      randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex--;
+  
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [
+        array[randomIndex], array[currentIndex]];
+    }
+  
+    return array;
+};
+
 export class MakeTable implements BotModule {
     MAKE_TABLE_COMMAND = "Make Tables";
 
@@ -28,7 +46,7 @@ export class MakeTable implements BotModule {
 
         const usernames = usersPerReaction
             .flatMap(userCollection => Array.from(userCollection.values(), u => u.username));
-        const uniqueUsernames = [...new Set(usernames)];
+        const uniqueUsernames = shuffle([...new Set(usernames)]);
 
         let msg = "";
         const tables = Math.trunc(uniqueUsernames.length / 4);
