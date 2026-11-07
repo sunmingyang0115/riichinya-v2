@@ -10,7 +10,7 @@ export type Wwyd = {
 	indicator: string;
 	hand: string[];
 	draw: string;
-	answer: string;
+	answer: string | string[];
 	comment: (string | string[])[];
 };
 

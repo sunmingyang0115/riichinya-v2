@@ -55,7 +55,7 @@ type Wwyd = {
 	indicator: string;
 	hand: string[];
 	draw: string;
-	answer: string;
+	answer: string | string[];
 	comment: (string | string[])[];
 };
 
@@ -103,6 +103,9 @@ export const getWwyd = (wwyds: Wwyd[], date: dayjs.Dayjs) => {
 };
 
 const buttonCustomIDHeader = `testwwyd:guess:`;
+
+export const getWwydAnswers = (wwyd: Wwyd): string[] =>
+	Array.isArray(wwyd.answer) ? wwyd.answer : [wwyd.answer];
 
 export class WwydModule implements BotModule {
 
@@ -226,7 +229,7 @@ export class WwydModule implements BotModule {
                 await interaction.editReply({ content: "", embeds: [eb, explanationEmbed], files });
             }
             else {
-                const correct = tile === wwyd.answer;
+                const correct = getWwydAnswers(wwyd).includes(tile);
 
                 u.attempts = (u.attempts ?? 0) + 1;
 
@@ -623,7 +626,7 @@ export const prepareWwydEmbed = async (
 		}
 	})();
 
-	embed.setTitle(`Answer: \\| ${spoiler(wwyd.answer)} \\|`);
+	embed.setTitle(`Answer: \\| ${spoiler(getWwydAnswers(wwyd).join(" or "))} \\|`);
 
 	const parseCommentElements = (str: string[] | string) => {
 		if (!Array.isArray(str)) {
